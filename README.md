@@ -41,36 +41,32 @@ resources/ffmpeg/windows/ffprobe.exe
 ```
 
 ### Release build (optimized GUI)
-
-Creates a distribution in `dist/`.  
-Default is a **onedir build** (fast startup). You can switch to onefile if needed.
-
+Default: fast onedir build
 ```powershell
-# Default: fast onedir build
-.uild.ps1 -Task release -Icon "resources\branding\icon.ico"
-
-# Optional: single-file build (slower startup, self-extracting EXE)
-.uild.ps1 -Task release -OneFile:$true -Icon "resources\branding\icon.ico"
+.build.ps1 -Task release -Icon "resources\branding\kevnet-logo.png"
 ```
-
+Optional: single-file build (slower startup, self-extracting EXE)
+```powershell
+.build.ps1 -Task release -OneFile:$true -Icon "resources\branding\kevnet-logo.png"
+```
 Artifacts appear in the `dist/` directory.
 
 ### Debug build (console + verbose PyInstaller logs)
 
 ```powershell
-.uild.ps1 -Task debug
+.build.ps1 -Task debug
 ```
 
 ### Run (development shortcut)
 
 ```powershell
-.uild.ps1 -Task run
+.build.ps1 -Task run
 ```
 
 ### Clean build artifacts
 
 ```powershell
-.uild.ps1 -Task clean
+.build.ps1 -Task clean
 ```
 
 ## FFmpeg on Windows
