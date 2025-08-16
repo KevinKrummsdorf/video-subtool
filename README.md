@@ -43,11 +43,11 @@ resources/ffmpeg/windows/ffprobe.exe
 ### Release build (optimized GUI)
 Default: fast onedir build
 ```powershell
-.\build.ps1 -Task release -Icon "resources\branding\kevnet-logo.png"
+.\build.ps1 -Task release -Icon "resources\branding\icon.ico"
 ```
 Optional: single-file build (slower startup, self-extracting EXE)
 ```powershell
-.\build.ps1 -Task release -OneFile:$true -Icon "resources\branding\kevnet-logo.png"
+.\build.ps1 -Task release -OneFile:$true -Icon "resources\branding\icon.ico"
 ```
 Artifacts appear in the `dist/` directory.
 
