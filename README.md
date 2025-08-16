@@ -12,11 +12,46 @@ VideoSubTool is a **PySide6** GUI on top of FFmpeg/ffprobe for managing subtitle
 - Settings dialog with language switch (DE/EN) and FFmpeg path selection
 - FFmpeg finder order: custom → system PATH → bundled `resources/ffmpeg/<platform>/`
 
-## Development / Run
+## Build
 
+### Prerequisites
+- Python 3.12
+- [Poetry](https://python-poetry.org/) installed and on PATH
+- Windows: PowerShell 5+ or PowerShell 7+
+
+### Install (development)
 ```bash
+git clone https://github.com/KevinKrummsdorf/video-subtool.git
+cd video-subtool
 poetry install
 poetry run video-subtool
+```
+### Bundled FFmpeg (Windows)
+
+If you want to ship FFmpeg with the app, place binaries here:
+```bash
+resources/ffmpeg/windows/ffmpeg.exe
+resources/ffmpeg/windows/ffprobe.exe
+```
+### Release build
+
+Creates an optimized GUI build. By default it is a single-file executable.
+```bash
+.\build.ps1 -Task release -Icon "resources\branding\icon.ico"
+```
+Tip (faster startup): prefer a one-directory build to avoid onefile extraction on every launch.
+```bash
+.\build.ps1 -Task release -OneFile:$false -Icon "resources\branding\icon.ico"
+```
+Artifacts appear in dist/.
+
+### Debug build (console + PyInstaller logs)
+```bash
+.\build.ps1 -Task debug
+```
+### Clean
+```bash
+.\build.ps1 -Task clean
 ```
 
 ## FFmpeg on Windows
@@ -28,7 +63,8 @@ These builds are licensed under the [GPLv3](resources/LICENSES/FFmpeg/FFmpeg-GPL
 
 See additional information in [NOTICE.txt](resources/LICENSES/FFmpeg/NOTICE.txt).
 
-
 ## License
 
 Released under the MIT License.
+
+
