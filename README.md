@@ -43,30 +43,30 @@ resources/ffmpeg/windows/ffprobe.exe
 ### Release build (optimized GUI)
 Default: fast onedir build
 ```powershell
-.build.ps1 -Task release -Icon "resources\branding\kevnet-logo.png"
+.\build.ps1 -Task release -Icon "resources\branding\kevnet-logo.png"
 ```
 Optional: single-file build (slower startup, self-extracting EXE)
 ```powershell
-.build.ps1 -Task release -OneFile:$true -Icon "resources\branding\kevnet-logo.png"
+.\build.ps1 -Task release -OneFile:$true -Icon "resources\branding\kevnet-logo.png"
 ```
 Artifacts appear in the `dist/` directory.
 
 ### Debug build (console + verbose PyInstaller logs)
 
 ```powershell
-.build.ps1 -Task debug
+.\build.ps1 -Task debug
 ```
 
 ### Run (development shortcut)
 
 ```powershell
-.build.ps1 -Task run
+.\build.ps1 -Task run
 ```
 
 ### Clean build artifacts
 
 ```powershell
-.build.ps1 -Task clean
+.\build.ps1 -Task clean
 ```
 
 ## FFmpeg on Windows
