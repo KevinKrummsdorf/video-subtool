@@ -21,7 +21,13 @@ poetry run video-subtool
 
 ## FFmpeg on Windows
 
-The Windows distribution bundles FFmpeg. The included binaries are licensed separately; see `resources/LICENSES/FFmpeg` for details.
+This project uses [FFmpeg](https://ffmpeg.org/).
+
+On Windows, an FFmpeg build from [BtbN/FFmpeg-Builds](https://github.com/BtbN/FFmpeg-Builds) is bundled with the application.  
+These builds are licensed under the [GPLv3](resources/LICENSES/FFmpeg/FFmpeg-GPLv3.txt).  
+
+See additional information in [NOTICE.txt](resources/LICENSES/FFmpeg/NOTICE.txt).
+
 
 ## License
 
