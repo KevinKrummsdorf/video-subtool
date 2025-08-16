@@ -1,0 +1,15 @@
+FFmpeg License Information
+==========================
+
+This application bundles prebuilt FFmpeg binaries provided by:
+BtbN/FFmpeg-Builds (https://github.com/BtbN/FFmpeg-Builds)
+
+These binaries are licensed under the GNU General Public License, version 3 (GPLv3).
+See the file FFmpeg-GPLv3.txt for the full license text.
+
+FFmpeg is also available under the GNU Lesser General Public License (LGPL v2.1).
+See the file FFmpeg-LGPLv2.1.txt for details.
+
+Source code of FFmpeg is available at:
+https://ffmpeg.org/download.html
+https://github.com/FFmpeg/FFmpeg

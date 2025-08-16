@@ -1,0 +1,48 @@
+name: build
+on: [push, workflow_dispatch]
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install poetry
+      - run: poetry install --no-interaction
+      - name: Build EXE
+        run: |
+          poetry run pyinstaller --noconfirm --clean ^
+            --name "VideoSubTool" ^
+            --onefile ^
+            --windowed ^
+            --add-data "resources;resources" ^
+            src/app/main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VideoSubTool-Windows
+          path: dist/VideoSubTool.exe
+
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install poetry
+      - run: poetry install --no-interaction
+      - run: |
+          chmod +x resources/ffmpeg/linux/ffmpeg || true
+          chmod +x resources/ffmpeg/linux/ffprobe || true
+      - name: Build OneFile
+        run: |
+          poetry run pyinstaller --noconfirm --clean \
+            --name "video-subtool" \
+            --onefile \
+            --windowed \
+            --add-data "resources:resources" \
+            src/app/main.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VideoSubTool-Linux
+          path: dist/video-subtool

@@ -1,0 +1,11 @@
+FFmpeg for Windows is bundled with this application.
+
+Builds from: https://github.com/BtbN/FFmpeg-Builds
+Project: https://ffmpeg.org/
+
+These builds are distributed under the terms of the GPL or LGPL as
+specified by FFmpeg. See FFmpeg-LICENSE.txt for details.
+
+If you prefer using a system-wide FFmpeg instead of the bundled one,
+you can change this in “Settings → FFmpeg paths” or disable
+“Prefer bundled binaries”.

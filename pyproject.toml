@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "video-subtool"
+version = "0.2.0"
+description = "GUI-Tool: Videos laden, Untertitel-Streams anzeigen/exportieren/entfernen und Originaldatei ersetzen."
+authors = ["Kevin Krummsdorf"]
+readme = "README.md"
+packages = [{include = "app", from = "src"}]
+
+[tool.poetry.dependencies]
+python = ">=3.11,<3.14"
+pyside6 = "^6.9"
+rich = "^13.7"
+
+[tool.poetry.group.dev.dependencies]
+pyinstaller = "^6.7"
+
+[tool.poetry.scripts]
+video-subtool = "app.main:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
