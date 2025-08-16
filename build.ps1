@@ -64,29 +64,10 @@ function Has-PyInstallerFlag {
 }
 
 function Get-PySideArgs {
-  <#
-    Keep Qt payload minimal for performance:
-    - Collect only the Qt modules actually used by the app
-      (QtCore, QtGui, QtWidgets).
-    - Also collect data for PySide6 itself.
-    - If PyInstaller is too aggressive on your setup, switch to --collect-all PySide6.
-  #>
-  $args = @(
-    '--collect-submodules','PySide6.QtCore',
-    '--collect-submodules','PySide6.QtGui',
-    '--collect-submodules','PySide6.QtWidgets',
-    '--collect-data','PySide6'
-  )
-
-  # If available, also collect binaries/plugins narrowly (fewer files than --collect-all).
-  if (Has-PyInstallerFlag '--collect-binaries' -and Has-PyInstallerFlag '--collect-plugins') {
-    $args += @('--collect-binaries','PySide6','--collect-plugins','PySide6')
-  } else {
-    # Safe fallback (bigger, but robust)
-    $args += @('--collect-all','PySide6')
-  }
-  ,$args
+  # Kompatibler, robuster Fallback (größeres Bundle, aber funktioniert überall):
+  @('--collect-all','PySide6')
 }
+
 
 function Remove-PyCaches {
   Get-ChildItem -Recurse -Directory -Filter "__pycache__" |
