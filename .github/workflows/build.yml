@@ -1,48 +1,81 @@
 name: build
-on: [push, workflow_dispatch]
+
+on:
+  push:
+  workflow_dispatch:
 
 jobs:
   windows:
+    name: Build on Windows
     runs-on: windows-latest
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      POETRY_VIRTUALENVS_IN_PROJECT: true
+    defaults:
+      run:
+        shell: pwsh  # use PowerShell on Windows
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install poetry
-      - run: poetry install --no-interaction
-      - name: Build EXE
-        run: |
-          poetry run pyinstaller --noconfirm --clean ^
-            --name "VideoSubTool" ^
-            --onefile ^
-            --windowed ^
-            --add-data "resources;resources" ^
-            src/app/main.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4  # checkout source
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"  # enable pip caching
+          cache-dependency-path: poetry.lock
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Build executable
+        # single-line command to avoid PowerShell line continuation issues
+        run: poetry run pyinstaller --noconfirm --clean --windowed --name "VideoSubTool" --collect-all PySide6 --add-data "resources;resources" src/app/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: VideoSubTool-Windows
           path: dist/VideoSubTool.exe
 
   linux:
+    name: Build on Linux
     runs-on: ubuntu-latest
+    env:
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      POETRY_VIRTUALENVS_IN_PROJECT: true
+    defaults:
+      run:
+        shell: bash  # run bash on Linux
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: pip install poetry
-      - run: poetry install --no-interaction
-      - run: |
-          chmod +x resources/ffmpeg/linux/ffmpeg || true
-          chmod +x resources/ffmpeg/linux/ffprobe || true
-      - name: Build OneFile
-        run: |
-          poetry run pyinstaller --noconfirm --clean \
-            --name "video-subtool" \
-            --onefile \
-            --windowed \
-            --add-data "resources:resources" \
-            src/app/main.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/checkout@v4  # checkout source
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"  # enable pip caching
+          cache-dependency-path: poetry.lock
+
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      - name: Install Poetry
+        run: python -m pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Build executable
+        run: poetry run pyinstaller --noconfirm --clean --windowed --name "VideoSubTool" --collect-all PySide6 --add-data "resources:resources" src/app/main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
           name: VideoSubTool-Linux
-          path: dist/video-subtool
+          path: dist
