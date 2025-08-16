@@ -37,45 +37,17 @@ jobs:
         # single-line command to avoid PowerShell line continuation issues
         run: poetry run pyinstaller --noconfirm --clean --windowed --name "VideoSubTool" --collect-all PySide6 --add-data "resources;resources" src/app/main.py
 
+      - name: Inspect build output
+        run: |
+          Get-ChildItem -Recurse dist | Format-Table -AutoSize
+          if (!(Test-Path dist/VideoSubTool)) {
+            Write-Error 'dist/VideoSubTool not found'
+            exit 1
+          }
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: VideoSubTool-Windows
-          path: dist/VideoSubTool.exe
-
-  linux:
-    name: Build on Linux
-    runs-on: ubuntu-latest
-    env:
-      PIP_DISABLE_PIP_VERSION_CHECK: 1
-      POETRY_VIRTUALENVS_IN_PROJECT: true
-    defaults:
-      run:
-        shell: bash  # run bash on Linux
-    steps:
-      - uses: actions/checkout@v4  # checkout source
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"  # enable pip caching
-          cache-dependency-path: poetry.lock
-
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install Poetry
-        run: python -m pip install poetry
-
-      - name: Install dependencies
-        run: poetry install --no-interaction
-
-      - name: Build executable
-        run: poetry run pyinstaller --noconfirm --clean --windowed --name "VideoSubTool" --collect-all PySide6 --add-data "resources:resources" src/app/main.py
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: VideoSubTool-Linux
-          path: dist
+          path: dist/VideoSubTool/**
+          if-no-files-found: error
