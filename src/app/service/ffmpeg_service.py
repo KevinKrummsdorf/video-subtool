@@ -1,3 +1,4 @@
+#src/app/service/ffmpeg_service.py
 from __future__ import annotations
 import json
 import os
@@ -11,6 +12,7 @@ from typing import Any, Dict, List, Optional
 from app.settings import custom_bin_path, use_bundled_preferred
 from app.model.probe_result import ProbeResult
 from app.model.probe_stream import ProbeStream
+
 
 class FfmpegService:
     """Kapselt Aufrufe von ffprobe/ffmpeg und Muxing-Logik."""
@@ -27,30 +29,39 @@ class FfmpegService:
         return candidate if candidate.exists() else None
 
     def _chmod_exec(self, p: Path):
-        try: os.chmod(p, 0o755)
-        except: pass
+        try:
+            os.chmod(p, 0o755)
+        except Exception:
+            pass
 
     def find_ffbin(self, name: str) -> str:
+        # 1) Benutzerdefinierter Pfad?
         custom = custom_bin_path(name)
         if custom and Path(custom).exists():
+            # print(f"[ffmpeg] using custom: {custom}", file=sys.stderr)
             return custom
 
+        # 2) Bevorzugt gebündelt?
         prefer_bundled = use_bundled_preferred()
         if prefer_bundled:
             vend = self._vendor_ffbin(name)
             if vend:
                 self._chmod_exec(vend)
+                # print(f"[ffmpeg] using bundled: {vend}", file=sys.stderr)
                 return str(vend)
             sysbin = shutil.which(name)
             if sysbin:
+                # print(f"[ffmpeg] fallback system: {sysbin}", file=sys.stderr)
                 return sysbin
         else:
             sysbin = shutil.which(name)
             if sysbin:
+                # print(f"[ffmpeg] using system: {sysbin}", file=sys.stderr)
                 return sysbin
             vend = self._vendor_ffbin(name)
             if vend:
                 self._chmod_exec(vend)
+                # print(f"[ffmpeg] fallback bundled: {vend}", file=sys.stderr)
                 return str(vend)
 
         raise FileNotFoundError(

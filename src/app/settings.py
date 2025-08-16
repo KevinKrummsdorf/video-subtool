@@ -3,14 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 import json
 import os
+import platform
+from typing import Optional
 
 ORG = "KevNetwork"
 APP = "VideoSubTool"
-
-DEFAULT_URLS = {
-    "windows": {"ffmpeg": "", "ffprobe": ""},
-    "linux": {"ffmpeg": "", "ffprobe": ""},
-}
 
 # --- Optional: QSettings verwenden, wenn PySide6 verfügbar ist ---
 _QSETTINGS_AVAILABLE = False
@@ -24,6 +21,7 @@ except Exception:
 _CFG_DIR = Path.home() / f".{APP.lower()}"
 _CFG_DIR.mkdir(parents=True, exist_ok=True)
 _CFG_FILE = _CFG_DIR / "config.json"
+
 
 class _DictSettings:
     """
@@ -39,7 +37,7 @@ class _DictSettings:
             except Exception:
                 self._data = {}
 
-    def value(self, key: str, default=None, type=None):  # noqa: A003 (shadow builtins)
+    def value(self, key: str, default=None, type=None):  # noqa: A003
         val = self._data.get(key, default)
         # einfache Typkonvertierung wie QSettings
         if type is bool:
@@ -60,6 +58,7 @@ class _DictSettings:
         except Exception:
             pass
 
+
 def get_settings():
     """
     Liefert ein Objekt mit .value(key, default, type=...) und .setValue(key, val)
@@ -70,14 +69,63 @@ def get_settings():
         return QSettings(ORG, APP)  # type: ignore
     return _DictSettings(_CFG_FILE)
 
+
 def app_data_dir() -> Path:
     return _CFG_DIR
 
-def use_bundled_preferred() -> bool:
-    s = get_settings()
-    return bool(s.value("use_bundled", False, type=bool))
 
-def custom_bin_path(name: str) -> str | None:
+# ---------------------- Helpers für Bundled-FFmpeg ----------------------
+
+def _project_root() -> Path:
+    """
+    Projektwurzel:
+      - im PyInstaller-Build: sys._MEIPASS
+      - im Dev: zwei Ordner über dieser Datei (…/src/app -> Projektroot)
+    """
+    import sys as _sys
+    return Path(getattr(_sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
+
+
+def _bundled_ffmpeg_dir() -> Path:
+    plat = "windows" if platform.system() == "Windows" else "linux"
+    return _project_root() / "resources" / "ffmpeg" / plat
+
+
+def _bundled_ffmpeg_paths() -> tuple[Path, Path]:
+    d = _bundled_ffmpeg_dir()
+    if platform.system() == "Windows":
+        return d / "ffmpeg.exe", d / "ffprobe.exe"
+    else:
+        return d / "ffmpeg", d / "ffprobe"
+
+
+def bundled_ffmpeg_available() -> bool:
+    ffmpeg, ffprobe = _bundled_ffmpeg_paths()
+    return ffmpeg.exists() and ffprobe.exists()
+
+
+def use_bundled_preferred() -> bool:
+    """
+    True, wenn:
+      - Setting 'use_bundled' explizit True ist, ODER
+      - Setting noch NICHT gesetzt ist UND (Windows) UND Bundled-Binaries vorhanden sind.
+    Sonst False.
+    """
     s = get_settings()
-    v = s.value(f"path_{name}", "", type=str)
-    return v or None
+    val = s.value("use_bundled", None)  # bewusst ohne type=bool -> None möglich
+    if isinstance(val, bool):
+        return val
+    # intelligenter Default, falls Nutzer nichts gesetzt hat:
+    if platform.system() == "Windows" and bundled_ffmpeg_available():
+        return True
+    return False
+
+
+def custom_bin_path(name: str) -> Optional[str]:
+    """
+    Benutzerdefinierter Pfad (Einstellungen) – nur zurückgeben, wenn vorhanden.
+    """
+    s = get_settings()
+    v = s.value(f"path_{name}", "", type=str) or ""
+    v = v.strip()
+    return v if v and Path(v).exists() else None

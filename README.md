@@ -12,11 +12,65 @@ VideoSubTool is a **PySide6** GUI on top of FFmpeg/ffprobe for managing subtitle
 - Settings dialog with language switch (DE/EN) and FFmpeg path selection
 - FFmpeg finder order: custom → system PATH → bundled `resources/ffmpeg/<platform>/`
 
-## Development / Run
+## Development Setup
 
+### Prerequisites
+- Python 3.12
+- [Poetry](https://python-poetry.org/) installed and on PATH
+- Windows: PowerShell 5+ or PowerShell 7+
+
+### Install (development)
 ```bash
+git clone https://github.com/KevinKrummsdorf/video-subtool.git
+cd video-subtool
 poetry install
 poetry run video-subtool
+```
+
+## Build Instructions
+
+The build is managed by **build.ps1** (PowerShell).  
+You can choose between `release`, `debug`, `run`, and `clean`.
+
+### Bundled FFmpeg (Windows)
+
+If you want to ship FFmpeg with the app, place binaries here:
+```
+resources/ffmpeg/windows/ffmpeg.exe
+resources/ffmpeg/windows/ffprobe.exe
+```
+
+### Release build (optimized GUI)
+
+Creates a distribution in `dist/`.  
+Default is a **onedir build** (fast startup). You can switch to onefile if needed.
+
+```powershell
+# Default: fast onedir build
+.uild.ps1 -Task release -Icon "resources\branding\icon.ico"
+
+# Optional: single-file build (slower startup, self-extracting EXE)
+.uild.ps1 -Task release -OneFile:$true -Icon "resources\branding\icon.ico"
+```
+
+Artifacts appear in the `dist/` directory.
+
+### Debug build (console + verbose PyInstaller logs)
+
+```powershell
+.uild.ps1 -Task debug
+```
+
+### Run (development shortcut)
+
+```powershell
+.uild.ps1 -Task run
+```
+
+### Clean build artifacts
+
+```powershell
+.uild.ps1 -Task clean
 ```
 
 ## FFmpeg on Windows
@@ -28,7 +82,7 @@ These builds are licensed under the [GPLv3](resources/LICENSES/FFmpeg/FFmpeg-GPL
 
 See additional information in [NOTICE.txt](resources/LICENSES/FFmpeg/NOTICE.txt).
 
-
 ## License
 
-Released under the MIT License.
+This project is released under the **MIT License**.  
+See [LICENSE](LICENSE) for details.

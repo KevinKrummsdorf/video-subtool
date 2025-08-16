@@ -1,98 +1,142 @@
+# src/app/view/settings_dialog.py
 from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFileDialog, QCheckBox, QDialogButtonBox, QWidget, QComboBox
+    QFileDialog, QCheckBox, QComboBox, QDialogButtonBox, QWidget, QSizePolicy
 )
 
 from app.settings import get_settings
 from app import i18n
-from app.i18n import t
+from app.i18n import t, available_languages, current_language, set_language
+
 
 class SettingsDialog(QDialog):
-    """Einstellungsdialog (Sprache, Bundled/Paths)."""
-
-    def __init__(self, parent=None):
+    def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
-        self.settings = get_settings()
-
         self.setModal(True)
-        self._build_ui()
-        self._retranslate()
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
+
+        self.s = get_settings()
+
+        # --- Widgets --------------------------------------------------------
+        self.chk_use_bundled = QCheckBox(self)
+
+        self.le_ffmpeg = QLineEdit(self)
+        self.btn_ffmpeg = QPushButton("…", self)
+        self.btn_ffmpeg.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.btn_ffmpeg.clicked.connect(self._pick_ffmpeg)
+
+        self.le_ffprobe = QLineEdit(self)
+        self.btn_ffprobe = QPushButton("…", self)
+        self.btn_ffprobe.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.btn_ffprobe.clicked.connect(self._pick_ffprobe)
+
+        self.cmb_lang = QComboBox(self)
+        for code, label in available_languages().items():
+            self.cmb_lang.addItem(label, code)
+        # aktuelle Sprache setzen
+        idx = self.cmb_lang.findData(current_language())
+        if idx >= 0:
+            self.cmb_lang.setCurrentIndex(idx)
+
+        # Buttons (wir setzen die Beschriftung selbst, damit es übersetzt ist)
+        self.btns = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
+        self.btns.accepted.connect(self._save)
+        self.btns.rejected.connect(self.reject)
+
+        # --- Layout ---------------------------------------------------------
+        lay = QVBoxLayout(self)
+
+        lay.addWidget(self.chk_use_bundled)
+
+        # ffmpeg row
+        row_ffmpeg = QHBoxLayout()
+        self.lbl_ffmpeg = QLabel(self)
+        row_ffmpeg.addWidget(self.lbl_ffmpeg)
+        row_ffmpeg.addWidget(self.le_ffmpeg, 1)
+        row_ffmpeg.addWidget(self.btn_ffmpeg)
+        lay.addLayout(row_ffmpeg)
+
+        # ffprobe row
+        row_ffprobe = QHBoxLayout()
+        self.lbl_ffprobe = QLabel(self)
+        row_ffprobe.addWidget(self.lbl_ffprobe)
+        row_ffprobe.addWidget(self.le_ffprobe, 1)
+        row_ffprobe.addWidget(self.btn_ffprobe)
+        lay.addLayout(row_ffprobe)
+
+        # language row
+        row_lang = QHBoxLayout()
+        self.lbl_lang = QLabel(self)
+        row_lang.addWidget(self.lbl_lang)
+        row_lang.addWidget(self.cmb_lang, 1)
+        lay.addLayout(row_lang)
+
+        lay.addWidget(self.btns)
+
+        # --- Werte laden ----------------------------------------------------
+        self._load_from_settings()
+
+        # --- Signals --------------------------------------------------------
+        self.chk_use_bundled.stateChanged.connect(self._update_enabled)
+        self.cmb_lang.currentIndexChanged.connect(self._on_lang_changed)
         i18n.bus.language_changed.connect(self._retranslate)
 
-    def _build_ui(self):
-        self.chk_use_bundled = QCheckBox()
-        self.chk_use_bundled.setChecked(bool(self.settings.value("use_bundled", False, type=bool)))
+        # Initiale Texte + Enable-State
+        self._retranslate()
+        self._update_enabled()
 
-        self.ed_ffmpeg = QLineEdit(self.settings.value("path_ffmpeg", "", type=str) or "")
-        self.btn_ffmpeg = QPushButton("…")
-        self.btn_ffmpeg.clicked.connect(lambda: self._pick_file(self.ed_ffmpeg))
-
-        self.ed_ffprobe = QLineEdit(self.settings.value("path_ffprobe", "", type=str) or "")
-        self.btn_ffprobe = QPushButton("…")
-        self.btn_ffprobe.clicked.connect(lambda: self._pick_file(self.ed_ffprobe))
-
-        self.cbo_lang = QComboBox()
-        self.cbo_lang.addItem("Deutsch", "de")
-        self.cbo_lang.addItem("English", "en")
-        curr = i18n.current_language()
-        idx = self.cbo_lang.findData(curr)
-        if idx >= 0:
-            self.cbo_lang.setCurrentIndex(idx)
-
-        def row(label: QLabel, editor: QWidget, btn: QPushButton | None = None) -> QWidget:
-            w = QWidget()
-            h = QHBoxLayout(w); h.setContentsMargins(0,0,0,0)
-            h.addWidget(label); h.addWidget(editor, 1)
-            if btn: h.addWidget(btn)
-            return w
-
-        self.lbl_bundled = QLabel()
-        self.lbl_ffmpeg = QLabel()
-        self.lbl_ffprobe = QLabel()
-        self.lbl_lang = QLabel()
-
-        v = QVBoxLayout(self)
-        v.addWidget(self.lbl_bundled)
-        v.addSpacing(8)
-        v.addWidget(row(self.lbl_ffmpeg, self.ed_ffmpeg, self.btn_ffmpeg))
-        v.addWidget(row(self.lbl_ffprobe, self.ed_ffprobe, self.btn_ffprobe))
-        v.addSpacing(12)
-        v.addWidget(row(self.lbl_lang, self.cbo_lang, None))
-        v.addStretch(1)
-
-        btns = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel)
-        btns.accepted.connect(self._save)
-        btns.rejected.connect(self.reject)
-        v.addWidget(btns)
-        self._btns = btns
-
+    # ---------------------- UI Helfer ---------------------------------------
     def _retranslate(self, *_):
         self.setWindowTitle(t("sd.title"))
-        self.lbl_bundled.setText(t("sd.use.bundled"))
+        self.chk_use_bundled.setText(t("sd.use.bundled"))
         self.lbl_ffmpeg.setText(t("sd.ffmpeg.path"))
         self.lbl_ffprobe.setText(t("sd.ffprobe.path"))
         self.lbl_lang.setText(t("sd.lang"))
 
-    def _pick_file(self, line: QLineEdit):
-        path, _ = QFileDialog.getOpenFileName(self, t("sd.pick.file"))
-        if path:
-            line.setText(path)
+        # Button-Beschriftungen explizit setzen, damit sie zu DE/EN passen
+        b_save = self.btns.button(QDialogButtonBox.Save)
+        b_cancel = self.btns.button(QDialogButtonBox.Cancel)
+        if b_save:
+            b_save.setText(t("common.save"))
+        if b_cancel:
+            b_cancel.setText(t("common.cancel"))
+
+    def _update_enabled(self):
+        # Custom-Pfade nur bearbeitbar, wenn NICHT „bundled bevorzugen“
+        enabled = not self.chk_use_bundled.isChecked()
+        for w in (self.le_ffmpeg, self.btn_ffmpeg, self.le_ffprobe, self.btn_ffprobe):
+            w.setEnabled(enabled)
+
+    def _load_from_settings(self):
+        use_bundled = bool(self.s.value("use_bundled", False, type=bool))
+        self.chk_use_bundled.setChecked(use_bundled)
+
+        self.le_ffmpeg.setText(self.s.value("path_ffmpeg", "", type=str) or "")
+        self.le_ffprobe.setText(self.s.value("path_ffprobe", "", type=str) or "")
+
+    # ---------------------- Aktionen ----------------------------------------
+    def _pick_ffmpeg(self):
+        fn, _ = QFileDialog.getOpenFileName(self, t("sd.pick.file"))
+        if fn:
+            self.le_ffmpeg.setText(fn)
+
+    def _pick_ffprobe(self):
+        fn, _ = QFileDialog.getOpenFileName(self, t("sd.pick.file"))
+        if fn:
+            self.le_ffprobe.setText(fn)
+
+    def _on_lang_changed(self):
+        code = self.cmb_lang.currentData()
+        if code and code != current_language():
+            set_language(code)  # triggert _retranslate über den Bus
 
     def _save(self):
-        def valid_path(s: str) -> str:
-            p = Path(s) if s else None
-            return str(p) if p and p.exists() else ""
-
-        self.settings.setValue("use_bundled", bool(self.chk_use_bundled.isChecked()))
-        self.settings.setValue("path_ffmpeg", valid_path(self.ed_ffmpeg.text().strip()))
-        self.settings.setValue("path_ffprobe", valid_path(self.ed_ffprobe.text().strip()))
-
-        lang = self.cbo_lang.currentData()
-        from app.i18n import set_language
-        set_language(lang)
-
+        self.s.setValue("use_bundled", self.chk_use_bundled.isChecked())
+        # Pfade speichern (auch wenn ggf. deaktiviert – bestehende Werte bleiben erhalten)
+        self.s.setValue("path_ffmpeg", self.le_ffmpeg.text().strip())
+        self.s.setValue("path_ffprobe", self.le_ffprobe.text().strip())
         self.accept()
