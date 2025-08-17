@@ -3,7 +3,7 @@ from pathlib import Path
 import sys
 from typing import Optional, List, TypedDict
 
-from PySide6.QtCore import Qt, QTimer, Slot
+from PySide6.QtCore import Qt, QTimer, Slot, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QApplication,
@@ -28,6 +28,44 @@ class BatchStep(TypedDict, total=False):
     export_rel_idx: Optional[int]
 
 
+class VideoListWidget(QListWidget):
+    """List widget that accepts external video file drops."""
+
+    files_dropped = Signal(list)
+
+    def __init__(self, collector, parent=None):
+        super().__init__(parent)
+        self._collector = collector
+        self.setAcceptDrops(True)
+        self.setDragEnabled(False)
+
+    def _collect(self, e):
+        if not e.mimeData().hasUrls():
+            return []
+        paths = [Path(u.toLocalFile()) for u in e.mimeData().urls()]
+        return self._collector(paths)
+
+    def dragEnterEvent(self, e):  # noqa: N802 (Qt override)
+        if self._collect(e):
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dragMoveEvent(self, e):  # noqa: N802 (Qt override)
+        if self._collect(e):
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dropEvent(self, e):  # noqa: N802 (Qt override)
+        files = self._collect(e)
+        if files:
+            self.files_dropped.emit(files)
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+
 class MainWindow(QMainWindow):
     """Hauptfenster (nur View + Wiring zu Controllern)."""
 
@@ -44,11 +82,10 @@ class MainWindow(QMainWindow):
 
         # --- Topbar (Ordnerwahl) ---
         self.folder_label = QLabel()
-        self.btn_pick = QPushButton()
-        self.btn_pick.clicked.connect(self._pick_folder)
 
         # --- Videoliste ---
-        self.video_list = QListWidget()
+        self.video_list = VideoListWidget(self.sub_ctrl.collect_videos_from_paths)
+        self.video_list.files_dropped.connect(self._on_files_dropped)
         self.video_list.currentItemChanged.connect(self._on_video_selected)
 
         # --- Stream-Tabelle ---
@@ -103,7 +140,6 @@ class MainWindow(QMainWindow):
         topbar = QHBoxLayout()
         topbar.addWidget(self.folder_label)
         topbar.addStretch(1)
-        topbar.addWidget(self.btn_pick)
 
         self.lbl_streams = QLabel()
         self.lbl_videos = QLabel()
@@ -233,7 +269,6 @@ class MainWindow(QMainWindow):
         # Titel & Top-Leiste
         self.setWindowTitle(t("app.title"))
         self.folder_label.setText(t("mw.no.folder"))
-        self.btn_pick.setText(t("common.folder.choose"))
 
         # Labels
         self.lbl_streams.setText(t("mw.streams.in.video"))
@@ -292,6 +327,22 @@ class MainWindow(QMainWindow):
         if self.video_list.count() > 0:
             self.video_list.setCurrentRow(0)
         QTimer.singleShot(0, self._apply_table_layout)
+
+    def _on_files_dropped(self, files: List[Path]) -> None:
+        existing = {Path(self.video_list.item(i).data(Qt.UserRole)) for i in range(self.video_list.count())}
+        added: List[QListWidgetItem] = []
+        for p in files:
+            if p not in existing:
+                item = QListWidgetItem(p.name)
+                item.setData(Qt.UserRole, str(p))
+                self.video_list.addItem(item)
+                added.append(item)
+                existing.add(p)
+        if not added:
+            self.statusBar().showMessage(t("mw.no.videos"), 4000)
+            return
+        if not self.video_list.currentItem():
+            self.video_list.setCurrentItem(added[0])
 
     def _on_video_selected(self, curr: Optional[QListWidgetItem], prev: Optional[QListWidgetItem]):
         if not curr:
