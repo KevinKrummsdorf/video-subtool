@@ -37,12 +37,12 @@ class BatchWorker(QObject):
                     self._ctrl.strip_subs(f, keep=self.keep)
                 else:
                     if self.export_rel_idx is not None:
-                        self._ctrl.export_stream(f, self.export_rel_idx, f.parent / "subs_export")
+                        self._ctrl.export_stream(f, self.export_rel_idx)
                     else:
                         # naive All-Subs-Export (0..9 versuchen)
                         for rel in range(0, 10):
                             try:
-                                self._ctrl.export_stream(f, rel, f.parent / "subs_export")
+                                self._ctrl.export_stream(f, rel)
                             except Exception:
                                 if rel == 0:
                                     break

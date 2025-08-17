@@ -160,7 +160,10 @@ class FfmpegService:
 
 
 
-    def remove_subtitles_and_replace(self, file: Path, keep_kinds: Optional[List[str]] = None) -> Path:
+    def remove_subtitles_and_replace(self,
+                                     file: Path,
+                                     out_dir: Path,
+                                     keep_kinds: Optional[List[str]] = None) -> Path:
         pr = self.probe_file(file)
 
         # Ermitteln, welche Sub-Maps wir behalten
@@ -177,7 +180,9 @@ class FfmpegService:
                         keep_maps.append(f"0:s:{sub_rel}")
 
         ffmpeg = self.find_ffbin("ffmpeg")
-        tmp = file.with_suffix(file.suffix + ".tmp_mux.mkv")
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_file = out_dir / f"{file.stem}.mp4"
+        tmp = out_file.with_suffix(".tmp_mux.mp4")
         maps = self._build_non_sub_maps(pr)
         cmd = [ffmpeg, "-y", "-i", str(file)]
         for m in maps:
@@ -186,17 +191,5 @@ class FfmpegService:
             cmd += ["-map", km]
         cmd += ["-c", "copy", str(tmp)]
         subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-
-        backup = file.with_suffix(file.suffix + ".bak")
-        if backup.exists():
-            backup.unlink()
-        file.replace(backup)
-        try:
-            tmp.replace(file)
-            backup.unlink(missing_ok=True)
-        except Exception:
-            if file.exists():
-                file.unlink(missing_ok=True)
-            backup.replace(file)
-            raise
-        return file
+        tmp.replace(out_file)
+        return out_file

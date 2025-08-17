@@ -6,14 +6,19 @@ from typing import List, Tuple, Optional
 from app.model.video_item import VideoItem, is_video
 from app.service.ffmpeg_service import FfmpegService
 from app.service.detection_service import DetectionService
+from app.service.path_service import PathService, path_service
 from app.model.probe_result import ProbeResult
 
 class SubtitleController:
     """Controller für Einzelfunktionen (Scannen, Tabellen-Daten, Export/Strip)."""
 
-    def __init__(self, ffmpeg: FfmpegService | None = None, detect: DetectionService | None = None):
+    def __init__(self,
+                 ffmpeg: FfmpegService | None = None,
+                 detect: DetectionService | None = None,
+                 path_srv: PathService | None = None):
         self.ffmpeg = ffmpeg or FfmpegService()
         self.detect = detect or DetectionService()
+        self.path_srv = path_srv or path_service
 
     def collect_videos_from_paths(self, paths: List[Path], recursive: bool = True) -> List[Path]:
         """Collect unique video files from given paths.
@@ -65,9 +70,11 @@ class SubtitleController:
                 ))
         return rows
 
-    def export_stream(self, file: Path, rel_sub_index: int, out_dir: Path) -> Path:
+    def export_stream(self, file: Path, rel_sub_index: int) -> Path:
+        out_dir = self.path_srv.get_output_folder()
         return self.ffmpeg.export_subtitle(file, rel_sub_index, out_dir)
 
     def strip_subs(self, file: Path, keep: Optional[str]) -> Path:
         keep_kinds = [keep] if keep else None
-        return self.ffmpeg.remove_subtitles_and_replace(file, keep_kinds=keep_kinds)
+        out_dir = self.path_srv.get_output_folder()
+        return self.ffmpeg.remove_subtitles_and_replace(file, out_dir, keep_kinds=keep_kinds)
