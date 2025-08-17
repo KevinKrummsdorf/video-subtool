@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "video-subtool"
-version = "0.2.0"
+version = "0.3.0"
 description = "GUI-Tool: Videos laden, Untertitel-Streams anzeigen/exportieren/entfernen und Originaldatei ersetzen."
 authors = ["Kevin Krummsdorf"]
 readme = "README.md"
