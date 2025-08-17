@@ -97,6 +97,20 @@ def app_data_dir() -> Path:
     return _CFG_DIR
 
 
+def notify_style_default() -> str:
+    """Return current notification style or default to "toast"."""
+    s = get_settings()
+    return s.value("notify_style", "toast", type=str) or "toast"
+
+
+def set_notify_style(style: str) -> None:
+    """Persist chosen notification style."""
+    s = get_settings()
+    if style not in ("statusbar", "dialog", "toast"):
+        style = "toast"
+    s.setValue("notify_style", style)
+
+
 # ---------------------- Helpers für Bundled-FFmpeg ----------------------
 
 def _project_root() -> Path:
