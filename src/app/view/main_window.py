@@ -216,13 +216,14 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
 
+        # Standardordner = Verzeichnis der Anwendung
+        self._current_folder_path = ""
+        self.default_dir = Path(sys.argv[0]).resolve().parent
+
         # i18n
         i18n.bus.language_changed.connect(self._retranslate)
         self._retranslate()
 
-        # Standardordner = Verzeichnis der Anwendung
-        self.default_dir = Path(sys.argv[0]).resolve().parent
-        self._current_folder_path = ""
         self._update_current_folder_label(self.default_dir)
         self._load_folder(self.default_dir)
 
