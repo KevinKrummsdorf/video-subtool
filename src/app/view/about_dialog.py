@@ -13,6 +13,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QDialogButtonBox
 from app.settings import app_data_dir
 from app.i18n import t
 from app.service.ffmpeg_service import FfmpegService
+from app import __version__ as APP_VERSION
 
 
 def _base_dir() -> Path:
@@ -36,7 +37,9 @@ class AboutDialog(QDialog):
         try:
             app_ver = version("video-subtool")
         except PackageNotFoundError:
-            app_ver = "dev"
+            app_ver = APP_VERSION or "dev"
+        except Exception:
+            app_ver = APP_VERSION or "dev"
 
         head = QLabel(t("about.head") + f" <span style='opacity:.6'>(v{app_ver})</span>")
         f = QFont(head.font())
