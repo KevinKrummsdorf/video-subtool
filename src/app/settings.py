@@ -58,6 +58,26 @@ class _DictSettings:
         except Exception:
             pass
 
+    def remove(self, key: str) -> None:
+        if key in self._data:
+            del self._data[key]
+            try:
+                self.path.write_text(json.dumps(self._data, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+
+
+_OBSOLETE_KEYS = ("last_folder",)
+
+
+def _cleanup_obsolete(settings) -> None:
+    for key in _OBSOLETE_KEYS:
+        if hasattr(settings, "remove"):
+            try:
+                settings.remove(key)
+            except Exception:
+                pass
+
 
 def get_settings():
     """
@@ -66,8 +86,11 @@ def get_settings():
     """
     if _QSETTINGS_AVAILABLE:
         # QSettings schreibt unter Windows in die Registry, unter Linux nach ~/.config
-        return QSettings(ORG, APP)  # type: ignore
-    return _DictSettings(_CFG_FILE)
+        s = QSettings(ORG, APP)  # type: ignore
+    else:
+        s = _DictSettings(_CFG_FILE)
+    _cleanup_obsolete(s)
+    return s
 
 
 def app_data_dir() -> Path:

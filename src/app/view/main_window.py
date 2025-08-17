@@ -157,8 +157,6 @@ class MainWindow(QMainWindow):
         # Standardordner = Verzeichnis der Anwendung
         self.default_dir = Path(sys.argv[0]).resolve().parent
         self._load_folder(self.default_dir)
-        if hasattr(self.settings, "remove"):
-            self.settings.remove("last_folder")
 
         # Startgröße (60%) & Tabellenbreiten
         self._adjust_initial_size(splitter)
