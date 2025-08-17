@@ -7,7 +7,7 @@ param(
   # App metadata
   [string]$Name    = 'VideoSubTool',
   [string]$Entry   = 'src/app/main.py',
-  [string]$Icon    = 'resources/branding/icon.ico',
+  [string]$Icon    = '',   # auto-detect when empty
 
   # Add-data pairs (SRC;DEST) -> --add-data SRC;DEST
   [string[]]$Resources = @('resources;resources'),
@@ -68,6 +68,28 @@ function Get-PySideArgs {
   @('--collect-all','PySide6')
 }
 
+function Resolve-IconPath {
+  param([string]$IconPath)
+
+  if ($IconPath) {
+    if (-not (Test-Path $IconPath)) { throw ("Icon not found: {0}" -f $IconPath) }
+    return $IconPath
+  }
+
+  $candidates = @(
+    'resources/branding/icon.ico',
+    'resources/branding/kevnet-logo.ico',
+    'resources/branding/kevnet-logo.png',
+    'resources/branding/icon.png'
+  )
+
+  foreach ($c in $candidates) {
+    if (Test-Path $c) { return $c }
+  }
+
+  return $null
+}
+
 
 function Remove-PyCaches {
   Get-ChildItem -Recurse -Directory -Filter "__pycache__" |
@@ -94,9 +116,11 @@ function Build-CommonArgs {
   $pyArgs += (Get-PySideArgs)
   $pyArgs += (Join-AddDataArgs -Pairs $Resources)
 
-  if ($Icon) {
-    if (-not (Test-Path $Icon)) { throw ("Icon not found: {0}" -f $Icon) }
-    $pyArgs += @('--icon', $Icon)
+  $iconPath = Resolve-IconPath -IconPath $Icon
+  if ($iconPath) {
+    $pyArgs += @('--icon', $iconPath)
+  } else {
+    Write-Host 'Icon not found. Proceeding without custom icon.' -ForegroundColor Yellow
   }
 
   if (-not (Test-Path $Entry)) { throw ("Entry not found: {0}" -f $Entry) }

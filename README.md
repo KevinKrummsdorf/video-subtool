@@ -43,13 +43,15 @@ resources/ffmpeg/windows/ffprobe.exe
 ### Release build (optimized GUI)
 Default: fast onedir build
 ```powershell
-.\build.ps1 -Task release -Icon "resources\branding\icon.ico"
+\.\build.ps1 -Task release
 ```
 Optional: single-file build (slower startup, self-extracting EXE)
 ```powershell
-.\build.ps1 -Task release -OneFile:$true -Icon "resources\branding\icon.ico"
+\.\build.ps1 -Task release -OneFile:$true
 ```
 Artifacts appear in the `dist/` directory.
+
+The build script auto-detects `resources/branding/icon.ico` (with fallbacks). Use `-Icon <path>` to override the icon.
 
 ### Debug build (console + verbose PyInstaller logs)
 
