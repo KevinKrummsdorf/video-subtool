@@ -41,6 +41,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mw.current.folder": "Aktueller Ordner",
         "mw.video.files": "Videodateien:",
         "mw.streams.in.video": "Streams im ausgewählten Video:",
+        "mw.remove.selected": "Ausgewählte entfernen",
+        "mw.clear.list": "Liste leeren",
 
         # Keep-Options (Dropdown)
         "mw.keep.forced": "nur Forced behalten",
@@ -147,6 +149,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mw.current.folder": "Current folder",
         "mw.video.files": "Video files:",
         "mw.streams.in.video": "Streams in selected video:",
+        "mw.remove.selected": "Remove selected",
+        "mw.clear.list": "Clear list",
 
         # Keep-Options (Dropdown)
         "mw.keep.forced": "keep forced only",
