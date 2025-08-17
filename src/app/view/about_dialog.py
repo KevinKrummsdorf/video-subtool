@@ -26,6 +26,8 @@ def _resources_dir() -> Path:
 class AboutDialog(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
+        from PySide6.QtWidgets import QApplication
+        self.setWindowIcon(QApplication.instance().windowIcon())
         self.setWindowTitle(t("about.title"))
         self.setModal(True)
         self.setAttribute(Qt.WA_DeleteOnClose, True)
