@@ -5,13 +5,14 @@ from pathlib import Path
 from typing import Optional, List, TypedDict
 
 from PySide6.QtCore import Qt, QTimer, Slot, Signal
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QMessageBox, QSplitter, QStatusBar,
     QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit
 )
+from PySide6.QtWidgets import QSizePolicy
 
 from app.settings import get_settings
 from app.i18n import t
@@ -137,10 +138,31 @@ class MainWindow(QMainWindow):
         self.btn_start = QPushButton("Start")
         self.btn_start.clicked.connect(self._on_start_clicked)
 
-        # --- Layouts ---
-        topbar = QHBoxLayout()
-        topbar.addWidget(self.folder_label)
-        topbar.addStretch(1)
+        # --- compact header (current folder) ---------------------------------
+        topbar_w = QWidget()
+        topbar = QHBoxLayout(topbar_w)
+        topbar.setContentsMargins(0, 0, 0, 0)  # no inner padding
+        topbar.setSpacing(8)
+
+        # Make the label compact, single line, no extra padding
+        self.folder_label.setContentsMargins(0, 0, 0, 0)
+        self.folder_label.setWordWrap(False)
+        self.folder_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.folder_label.setStyleSheet("margin:0px; padding:0px;")
+        self.folder_label.setTextElideMode(Qt.ElideRight)
+
+        # Elide long paths at the end
+        fm = QFontMetrics(self.folder_label.font())
+        self.folder_label.setMinimumHeight(fm.height() + 2)
+
+        # Button stays at the far right if you still keep it
+        topbar.addWidget(self.folder_label, 1)
+        topbar.addStretch(1)           # keeps label compact, pushes button to the right if present
+        if hasattr(self, "btn_pick"):
+            topbar.addWidget(self.btn_pick)
+
+        # Ensure the header does not “grow” vertically
+        topbar_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         self.lbl_streams = QLabel()
         self.lbl_videos = QLabel()
@@ -182,7 +204,13 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         main = QVBoxLayout(central)
-        main.addLayout(topbar)
+
+        # Tighter global layout
+        main.setContentsMargins(10, 6, 10, 8)   # left, top, right, bottom
+        main.setSpacing(6)                      # vertical spacing between rows
+
+        # Put compact header first, then splitter
+        main.addWidget(topbar_w)
         main.addWidget(splitter)
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
@@ -282,10 +310,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(t("app.title"))
         text = self.folder_label.text().split(":", 1)
         tail = text[1].strip() if len(text) > 1 else ""
-        if tail:
-            self.folder_label.setText(f"{t('mw.current.folder')}: {tail}")
-        else:
-            self.folder_label.setText(f"{t('mw.current.folder')}: -")
+        self.folder_label.setText(f"{t('mw.current.folder')}: {tail}")
 
         # Labels
         self.lbl_streams.setText(t("mw.streams.in.video"))
