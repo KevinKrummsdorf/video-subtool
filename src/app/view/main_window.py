@@ -6,10 +6,11 @@ from typing import Optional, List, TypedDict
 
 from PySide6.QtCore import Qt, QTimer, Slot, Signal, QEvent
 from PySide6.QtGui import QAction, QFontMetrics
+from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QMessageBox, QSplitter, QStatusBar,
+    QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QSplitter, QStatusBar,
     QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit, QMenu
 )
 from PySide6.QtWidgets import QSizePolicy
@@ -78,7 +79,7 @@ class MainWindow(QMainWindow):
         self.batch_ctrl = BatchController(self)
         self.batch_ctrl.progress.connect(self._on_batch_progress)
         self.batch_ctrl.error.connect(self._on_batch_error)
-        self.batch_ctrl.finished.connect(self._on_batch_finished_chained)
+        self.batch_ctrl.finished.connect(self._on_batch_finished)
 
         self._build_menu()
 
@@ -580,8 +581,9 @@ class MainWindow(QMainWindow):
             try:
                 out = self.sub_ctrl.export_stream(src, rel_idx, out_dir)
                 self.statusBar().showMessage(t("mw.exported", path=str(out)), 5000)
+                QMessageBox.information(self, t("mw.export.done.title"), t("mw.export.done.msg"))
             except Exception as e:
-                QMessageBox.critical(self, t("mw.export.failed"), str(e))
+                QMessageBox.critical(self, t("mw.export.fail.title"), f"{t('mw.export.fail.msg')}\n\n{e}")
                 return
 
         # Strip: alle oder nach Regel
@@ -596,8 +598,9 @@ class MainWindow(QMainWindow):
                 out = self.sub_ctrl.strip_subs(src, keep=keep)
                 self._on_video_selected(self.video_list.currentItem(), None)
                 self.statusBar().showMessage(t("mw.replaced", name=out.name), 5000)
+                QMessageBox.information(self, t("mw.remove.done.title"), t("mw.remove.done.msg"))
             except Exception as e:
-                QMessageBox.critical(self, t("mw.analyze.error"), str(e))
+                QMessageBox.critical(self, t("mw.remove.fail.title"), f"{t('mw.remove.fail.msg')}\n\n{e}")
                 return
 
     # ---------- Batch-Kette ----------
@@ -616,7 +619,6 @@ class MainWindow(QMainWindow):
                 self._progress.close()
                 self._progress = None
             self._on_video_selected(self.video_list.currentItem(), None)
-            QMessageBox.information(self, t("common.done"), "Batch abgeschlossen.")
             return
 
         step = self._batch_queue.pop(0)
@@ -638,8 +640,17 @@ class MainWindow(QMainWindow):
 
     def _on_batch_error(self, msg: str):
         self.statusBar().showMessage(f"Error: {msg}", 7000)
+        QMessageBox.critical(self, t("mw.batch.fail.title"), msg)
 
-    def _on_batch_finished_chained(self, processed: int, errors: int):
+    def _on_batch_finished(self, processed: int, errors: int):
         if self._progress:
             self._progress.setLabelText(f"{t('common.done.processed')}: {processed} | {t('common.done.errors')}: {errors}")
+        if errors == 0:
+            QMessageBox.information(self, t("mw.batch.done.title"), t("mw.batch.done.msg", processed=str(processed)))
+        else:
+            QMessageBox.warning(
+                self,
+                t("mw.batch.done.title"),
+                t("mw.batch.done.partial", processed=str(processed), errors=str(errors))
+            )
         self._start_next_batch_step()
