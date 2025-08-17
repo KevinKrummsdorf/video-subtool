@@ -1,0 +1,57 @@
+name: release-windows
+
+on:
+  push:
+    tags:
+      - 'v*'        # läuft bei Tags wie v0.3.1
+
+permissions:
+  contents: write   # nötig, damit der Release erstellt werden darf
+
+jobs:
+  build-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Poetry
+        run: pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Build (PyInstaller via build.ps1)
+        shell: pwsh
+        run: |
+          ./build.ps1 -Task release
+          # Dist enthält onedir-Build:
+          #   dist/
+          #     VideoSubTool.exe
+          #     _internal/
+          #     resources/...
+          # Falls du onefile nutzt, passe das Packaging unten an.
+
+      - name: Package ZIP
+        shell: pwsh
+        run: |
+          $ver = "${{ github.ref_name }}"                 # z. B. v0.3.1
+          $zip = "VideoSubTool-$ver-windows.zip"
+          Compress-Archive -Path dist\* -DestinationPath $zip -Force
+          echo "ZIP_NAME=$zip" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "VideoSubTool ${{ github.ref_name }}"
+          body: |
+            ## Changes
+            - See changelog / commit history.
+          files: ${{ env.ZIP_NAME }}
