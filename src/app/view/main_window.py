@@ -4,7 +4,7 @@ import sys
 from pathlib import Path
 from typing import Optional, List, TypedDict
 
-from PySide6.QtCore import Qt, QTimer, Slot, Signal
+from PySide6.QtCore import Qt, QTimer, Slot, Signal, QEvent
 from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtWidgets import (
     QApplication,
@@ -149,7 +149,8 @@ class MainWindow(QMainWindow):
         self.folder_label.setWordWrap(False)
         self.folder_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.folder_label.setStyleSheet("margin:0px; padding:0px;")
-        self.folder_label.setTextElideMode(Qt.ElideRight)
+        self.folder_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.folder_label.installEventFilter(self)
 
         # Elide long paths at the end
         fm = QFontMetrics(self.folder_label.font())
@@ -221,6 +222,7 @@ class MainWindow(QMainWindow):
 
         # Standardordner = Verzeichnis der Anwendung
         self.default_dir = Path(sys.argv[0]).resolve().parent
+        self._current_folder_path = ""
         self._update_current_folder_label(self.default_dir)
         self._load_folder(self.default_dir)
 
@@ -244,9 +246,23 @@ class MainWindow(QMainWindow):
         Ensures a single space after the colon and removes any artifacts.
         """
         p = Path(path).resolve()
-        # Normalize path for the current OS and strip trailing spaces
         norm = os.path.normpath(str(p)).strip()
-        self.folder_label.setText(f"{t('mw.current.folder')}: {norm}")
+        self._current_folder_path = norm
+        self._folder_label_text = f"{t('mw.current.folder')}: {norm}"
+        fm = QFontMetrics(self.folder_label.font())
+        elided = fm.elidedText(
+            self._folder_label_text, Qt.ElideRight, self.folder_label.width()
+        )
+        self.folder_label.setText(elided)
+
+    def eventFilter(self, obj, event):
+        if obj is self.folder_label and event.type() == QEvent.Resize:
+            fm = QFontMetrics(self.folder_label.font())
+            elided = fm.elidedText(
+                getattr(self, "_folder_label_text", ""), Qt.ElideRight, self.folder_label.width()
+            )
+            self.folder_label.setText(elided)
+        return super().eventFilter(obj, event)
 
     # ---------- Größe & Layout ----------
     def _adjust_initial_size(self, splitter: QSplitter) -> None:
@@ -308,9 +324,12 @@ class MainWindow(QMainWindow):
     def _retranslate(self, *_):
         # Titel & Top-Leiste
         self.setWindowTitle(t("app.title"))
-        text = self.folder_label.text().split(":", 1)
-        tail = text[1].strip() if len(text) > 1 else ""
-        self.folder_label.setText(f"{t('mw.current.folder')}: {tail}")
+        self._folder_label_text = f"{t('mw.current.folder')}: {self._current_folder_path}"
+        fm = QFontMetrics(self.folder_label.font())
+        elided = fm.elidedText(
+            self._folder_label_text, Qt.ElideRight, self.folder_label.width()
+        )
+        self.folder_label.setText(elided)
 
         # Labels
         self.lbl_streams.setText(t("mw.streams.in.video"))
