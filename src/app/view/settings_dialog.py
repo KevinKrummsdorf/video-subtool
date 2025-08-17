@@ -2,18 +2,21 @@
 from __future__ import annotations
 from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
-    QFileDialog, QCheckBox, QComboBox, QDialogButtonBox, QWidget, QSizePolicy
+    QFileDialog, QCheckBox, QComboBox, QDialogButtonBox, QWidget, QSizePolicy,
+    QGroupBox, QRadioButton
 )
 
-from app.settings import get_settings
+from app.settings import get_settings, notify_style_default, set_notify_style
 from app import i18n
 from app.i18n import t, available_languages, current_language, set_language
 
 
 class SettingsDialog(QDialog):
+    notify_style_changed = Signal(str)
+
     def __init__(self, parent: QWidget | None = None):
         super().__init__(parent)
         self.setModal(True)
@@ -41,6 +44,16 @@ class SettingsDialog(QDialog):
         idx = self.cmb_lang.findData(current_language())
         if idx >= 0:
             self.cmb_lang.setCurrentIndex(idx)
+
+        # Notification style
+        self.grp_notify = QGroupBox(self)
+        self.rb_status = QRadioButton(self.grp_notify)
+        self.rb_dialog = QRadioButton(self.grp_notify)
+        self.rb_toast = QRadioButton(self.grp_notify)
+        v_notify = QVBoxLayout(self.grp_notify)
+        v_notify.addWidget(self.rb_status)
+        v_notify.addWidget(self.rb_dialog)
+        v_notify.addWidget(self.rb_toast)
 
         # Buttons (wir setzen die Beschriftung selbst, damit es übersetzt ist)
         self.btns = QDialogButtonBox(QDialogButtonBox.Save | QDialogButtonBox.Cancel, self)
@@ -75,6 +88,7 @@ class SettingsDialog(QDialog):
         row_lang.addWidget(self.cmb_lang, 1)
         lay.addLayout(row_lang)
 
+        lay.addWidget(self.grp_notify)
         lay.addWidget(self.btns)
 
         # --- Werte laden ----------------------------------------------------
@@ -97,6 +111,11 @@ class SettingsDialog(QDialog):
         self.lbl_ffprobe.setText(t("sd.ffprobe.path"))
         self.lbl_lang.setText(t("sd.lang"))
 
+        self.grp_notify.setTitle(t("sd.notify.title"))
+        self.rb_status.setText(t("sd.notify.statusbar"))
+        self.rb_dialog.setText(t("sd.notify.dialog"))
+        self.rb_toast.setText(t("sd.notify.toast"))
+
         # Button-Beschriftungen explizit setzen, damit sie zu DE/EN passen
         b_save = self.btns.button(QDialogButtonBox.Save)
         b_cancel = self.btns.button(QDialogButtonBox.Cancel)
@@ -117,6 +136,14 @@ class SettingsDialog(QDialog):
 
         self.le_ffmpeg.setText(self.s.value("path_ffmpeg", "", type=str) or "")
         self.le_ffprobe.setText(self.s.value("path_ffprobe", "", type=str) or "")
+
+        cur = notify_style_default()
+        if cur == "statusbar":
+            self.rb_status.setChecked(True)
+        elif cur == "dialog":
+            self.rb_dialog.setChecked(True)
+        else:
+            self.rb_toast.setChecked(True)
 
     # ---------------------- Aktionen ----------------------------------------
     def _pick_ffmpeg(self):
@@ -139,4 +166,12 @@ class SettingsDialog(QDialog):
         # Pfade speichern (auch wenn ggf. deaktiviert – bestehende Werte bleiben erhalten)
         self.s.setValue("path_ffmpeg", self.le_ffmpeg.text().strip())
         self.s.setValue("path_ffprobe", self.le_ffprobe.text().strip())
+
+        style = "toast"
+        if self.rb_status.isChecked():
+            style = "statusbar"
+        elif self.rb_dialog.isChecked():
+            style = "dialog"
+        set_notify_style(style)
+        self.notify_style_changed.emit(style)
         self.accept()

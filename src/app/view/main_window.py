@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWidgets import QSizePolicy
 
-from app.settings import get_settings
+from app.settings import get_settings, notify_style_default
 from app.i18n import t
 from app import i18n
 from app.view.stream_table_model import StreamTableModel
@@ -23,6 +23,9 @@ from app.view.settings_dialog import SettingsDialog
 from app.view.about_dialog import AboutDialog
 from app.controller.subtitle_controller import SubtitleController
 from app.controller.batch_controller import BatchController
+from app.service.notification_center import notification_center
+from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, ToastNotifier
+from app.view.toast_overlay import ToastOverlay
 
 
 class BatchStep(TypedDict, total=False):
@@ -80,6 +83,10 @@ class MainWindow(QMainWindow):
         self.batch_ctrl.progress.connect(self._on_batch_progress)
         self.batch_ctrl.error.connect(self._on_batch_error)
         self.batch_ctrl.finished.connect(self._on_batch_finished)
+
+        self._toast_overlay = ToastOverlay(self)
+        self._notifier: INotifier = self._make_notifier()
+        notification_center.notification_requested.connect(self._on_notification_requested)
 
         self._build_menu()
 
@@ -247,6 +254,21 @@ class MainWindow(QMainWindow):
         self._progress: QProgressDialog | None = None
         self._batch_queue: List[BatchStep] = []
 
+    def _make_notifier(self):
+        style = notify_style_default()
+        if style == "statusbar":
+            return StatusBarNotifier(self)
+        if style == "dialog":
+            return DialogNotifier(self)
+        return ToastNotifier(self, self._toast_overlay)
+
+    def _on_notification_requested(self, level: str, text: str, ms: int) -> None:
+        if self._notifier:
+            self._notifier.notify(level, text, ms)
+
+    def _on_notify_style_changed(self, style: str) -> None:
+        self._notifier = self._make_notifier()
+
     def _update_current_folder_label(self, path: Path | str) -> None:
         """
         Set the header label to: '<translated>: <normalized-path>'
@@ -387,6 +409,7 @@ class MainWindow(QMainWindow):
 
     def _open_settings(self):
         dlg = SettingsDialog(self)
+        dlg.notify_style_changed.connect(self._on_notify_style_changed)
         if dlg.exec():
             self.statusBar().showMessage(t("sd.saved"), 4000)
 
@@ -580,8 +603,7 @@ class MainWindow(QMainWindow):
             out_dir = self._resolve_export_dir(src)
             try:
                 out = self.sub_ctrl.export_stream(src, rel_idx, out_dir)
-                self.statusBar().showMessage(t("mw.exported", path=str(out)), 5000)
-                QMessageBox.information(self, t("mw.export.done.title"), t("mw.export.done.msg"))
+                notification_center.success(t("toast.exported", path=str(out)))
             except Exception as e:
                 QMessageBox.critical(self, t("mw.export.fail.title"), f"{t('mw.export.fail.msg')}\n\n{e}")
                 return
@@ -597,8 +619,7 @@ class MainWindow(QMainWindow):
             try:
                 out = self.sub_ctrl.strip_subs(src, keep=keep)
                 self._on_video_selected(self.video_list.currentItem(), None)
-                self.statusBar().showMessage(t("mw.replaced", name=out.name), 5000)
-                QMessageBox.information(self, t("mw.remove.done.title"), t("mw.remove.done.msg"))
+                notification_center.success(t("toast.replaced", name=out.name))
             except Exception as e:
                 QMessageBox.critical(self, t("mw.remove.fail.title"), f"{t('mw.remove.fail.msg')}\n\n{e}")
                 return
@@ -639,18 +660,13 @@ class MainWindow(QMainWindow):
             self._progress.setValue(percent)
 
     def _on_batch_error(self, msg: str):
-        self.statusBar().showMessage(f"Error: {msg}", 7000)
-        QMessageBox.critical(self, t("mw.batch.fail.title"), msg)
+        notification_center.error(msg)
 
     def _on_batch_finished(self, processed: int, errors: int):
         if self._progress:
             self._progress.setLabelText(f"{t('common.done.processed')}: {processed} | {t('common.done.errors')}: {errors}")
         if errors == 0:
-            QMessageBox.information(self, t("mw.batch.done.title"), t("mw.batch.done.msg", processed=str(processed)))
+            notification_center.success(t("mw.batch.done.msg", processed=str(processed)))
         else:
-            QMessageBox.warning(
-                self,
-                t("mw.batch.done.title"),
-                t("mw.batch.done.partial", processed=str(processed), errors=str(errors))
-            )
+            notification_center.warn(t("mw.batch.done.partial", processed=str(processed), errors=str(errors)))
         self._start_next_batch_step()
