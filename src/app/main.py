@@ -1,7 +1,6 @@
 # src/app/main.py
 from __future__ import annotations
 
-import os
 import sys
 import traceback
 from pathlib import Path
@@ -20,15 +19,22 @@ EXTRA_DELAY_MS  = 2000   # Zusatzwartezeit NACH Fade, bevor MainWindow kommt
 
 
 # -------- Pfade (PyInstaller vs. Dev) --------
-def get_base_dir() -> Path:
-    if hasattr(sys, "_MEIPASS"):  # type: ignore[attr-defined]
-        return Path(sys._MEIPASS)  # type: ignore[attr-defined]
-    return Path(__file__).resolve().parents[2]
+def base_dir() -> Path:
+    return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 
 
-BASE_DIR = get_base_dir()
-os.chdir(BASE_DIR)
-RESOURCES_DIR = BASE_DIR / "resources"
+RESOURCES_DIR = base_dir() / "resources"
+
+
+# -------- Icon laden --------
+def load_app_icon() -> QIcon:
+    ico = RESOURCES_DIR / "branding" / "icon.ico"
+    if ico.exists():
+        return QIcon(str(ico))
+    png = RESOURCES_DIR / "branding" / "icon.png"
+    if png.exists():
+        return QIcon(str(png))
+    return QIcon()
 
 
 # -------- Windows: Taskleisten-Icon stabil --------
@@ -62,14 +68,16 @@ def main() -> int:
 
     app = QApplication(sys.argv)
 
-    # App-Icon
-    ico = RESOURCES_DIR / "icon.ico"
-    if ico.exists():
-        app.setWindowIcon(QIcon(str(ico)))
+    icon = load_app_icon()
+    if not icon.isNull():
+        app.setWindowIcon(icon)
 
     # --- Splash sofort anzeigen ---
     brand_img = RESOURCES_DIR / "branding" / "kevnet-logo.png"
-    splash_source = brand_img if brand_img.exists() else ico
+    ico_file = RESOURCES_DIR / "branding" / "icon.ico"
+    png_file = RESOURCES_DIR / "branding" / "icon.png"
+    fallback_img = ico_file if ico_file.exists() else png_file
+    splash_source = brand_img if brand_img.exists() else fallback_img
     splash = SplashScreen(image_path=splash_source, title=t("app.title"))
     splash.center_on_screen()
     splash.setWindowOpacity(1.0)
@@ -100,8 +108,8 @@ def main() -> int:
                 # WICHTIG: Starke Referenz halten (sonst schließt es sofort)
                 app._main_window = win  # type: ignore[attr-defined]
 
-                if ico.exists():
-                    win.setWindowIcon(QIcon(str(ico)))
+                if not icon.isNull():
+                    win.setWindowIcon(icon)
                 win.setWindowTitle(t("app.title"))
                 win.show()
 

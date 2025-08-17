@@ -7,7 +7,7 @@ param(
   # App metadata
   [string]$Name    = 'VideoSubTool',
   [string]$Entry   = 'src/app/main.py',
-  [string]$Icon    = '',   # auto-detect when empty
+  [string]$Icon    = '',   # override icon path
 
   # Add-data pairs (SRC;DEST) -> --add-data SRC;DEST
   [string[]]$Resources = @('resources;resources'),
@@ -76,17 +76,10 @@ function Resolve-IconPath {
     return $IconPath
   }
 
-  $candidates = @(
-    'resources/branding/icon.ico',
-    'resources/branding/kevnet-logo.ico',
-    'resources/branding/kevnet-logo.png',
-    'resources/branding/icon.png'
-  )
+  $default = 'resources/branding/icon.ico'
+  if (Test-Path $default) { return $default }
 
-  foreach ($c in $candidates) {
-    if (Test-Path $c) { return $c }
-  }
-
+  Write-Host "Icon not found at $default. Proceeding without custom icon." -ForegroundColor Yellow
   return $null
 }
 
@@ -119,8 +112,6 @@ function Build-CommonArgs {
   $iconPath = Resolve-IconPath -IconPath $Icon
   if ($iconPath) {
     $pyArgs += @('--icon', $iconPath)
-  } else {
-    Write-Host 'Icon not found. Proceeding without custom icon.' -ForegroundColor Yellow
   }
 
   if (-not (Test-Path $Entry)) { throw ("Entry not found: {0}" -f $Entry) }
