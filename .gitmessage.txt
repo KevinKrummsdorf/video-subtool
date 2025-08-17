@@ -1,0 +1,13 @@
+# Conventional Commit Template
+# ----------------------------
+# Format: <type>(<scope>): <short summary>
+# 
+# <type>: feat | fix | docs | style | refactor | perf | test | chore
+# <scope>: optional, z. B. module, lang, build
+#
+# Beispiele:
+# feat(lang): normalize subtitle language codes to ISO 639-1
+# fix(build): correct PyInstaller args for Windows
+# refactor(core): move subtitle extractor into separate class
+#
+# Commit Message:
