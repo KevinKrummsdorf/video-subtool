@@ -1,6 +1,7 @@
 from __future__ import annotations
-from pathlib import Path
+import os
 import sys
+from pathlib import Path
 from typing import Optional, List, TypedDict
 
 from PySide6.QtCore import Qt, QTimer, Slot, Signal
@@ -192,6 +193,7 @@ class MainWindow(QMainWindow):
 
         # Standardordner = Verzeichnis der Anwendung
         self.default_dir = Path(sys.argv[0]).resolve().parent
+        self._update_current_folder_label(self.default_dir)
         self._load_folder(self.default_dir)
 
         # Startgröße (60%) & Tabellenbreiten
@@ -207,6 +209,16 @@ class MainWindow(QMainWindow):
         # Laufzeit
         self._progress: QProgressDialog | None = None
         self._batch_queue: List[BatchStep] = []
+
+    def _update_current_folder_label(self, path: Path | str) -> None:
+        """
+        Set the header label to: '<translated>: <normalized-path>'
+        Ensures a single space after the colon and removes any artifacts.
+        """
+        p = Path(path).resolve()
+        # Normalize path for the current OS and strip trailing spaces
+        norm = os.path.normpath(str(p)).strip()
+        self.folder_label.setText(f"{t('mw.current.folder')}: {norm}")
 
     # ---------- Größe & Layout ----------
     def _adjust_initial_size(self, splitter: QSplitter) -> None:
@@ -268,7 +280,12 @@ class MainWindow(QMainWindow):
     def _retranslate(self, *_):
         # Titel & Top-Leiste
         self.setWindowTitle(t("app.title"))
-        self.folder_label.setText(t("mw.no.folder"))
+        text = self.folder_label.text().split(":", 1)
+        tail = text[1].strip() if len(text) > 1 else ""
+        if tail:
+            self.folder_label.setText(f"{t('mw.current.folder')}: {tail}")
+        else:
+            self.folder_label.setText(f"{t('mw.current.folder')}: -")
 
         # Labels
         self.lbl_streams.setText(t("mw.streams.in.video"))
@@ -317,7 +334,7 @@ class MainWindow(QMainWindow):
         self._load_folder(Path(path))
 
     def _load_folder(self, folder: Path):
-        self.folder_label.setText(str(folder))
+        self._update_current_folder_label(folder)
         self.video_list.clear()
         items = self.sub_ctrl.scan_folder(folder)
         for it in items:
