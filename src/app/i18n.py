@@ -38,6 +38,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
 
         # Main Window – Labels
         "mw.no.folder": "Kein Ordner gewählt",
+        "mw.current.folder": "Aktueller Ordner",
         "mw.video.files": "Videodateien:",
         "mw.streams.in.video": "Streams im ausgewählten Video:",
 
@@ -143,6 +144,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
 
         # Main Window – Labels
         "mw.no.folder": "No folder selected",
+        "mw.current.folder": "Current folder",
         "mw.video.files": "Video files:",
         "mw.streams.in.video": "Streams in selected video:",
 

@@ -15,12 +15,33 @@ class SubtitleController:
         self.ffmpeg = ffmpeg or FfmpegService()
         self.detect = detect or DetectionService()
 
+    def collect_videos_from_paths(self, paths: List[Path], recursive: bool = True) -> List[Path]:
+        """Collect unique video files from given paths.
+
+        Directories are scanned recursively by default.
+        """
+        files: List[Path] = []
+        seen = set()
+        for p in paths:
+            if p.is_dir():
+                iterator = p.rglob("*") if recursive else p.glob("*")
+                for sub in iterator:
+                    if sub.is_file() and is_video(sub):
+                        rp = sub.resolve()
+                        if rp not in seen:
+                            seen.add(rp)
+                            files.append(rp)
+            elif p.is_file() and is_video(p):
+                rp = p.resolve()
+                if rp not in seen:
+                    seen.add(rp)
+                    files.append(rp)
+        return files
+
     def scan_folder(self, folder: Path) -> List[VideoItem]:
-        items: List[VideoItem] = []
-        for p in sorted(folder.iterdir()):
-            if p.is_file() and is_video(p):
-                items.append(VideoItem(path=p))
-        return items
+        # Only scan the top-level directory for menu-based folder loading
+        files = self.collect_videos_from_paths([folder], recursive=False)
+        return [VideoItem(path=p) for p in files]
 
     def probe_file(self, file: Path) -> ProbeResult:
         return self.ffmpeg.probe_file(file)
