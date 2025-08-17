@@ -122,20 +122,57 @@ class FfmpegService:
         return maps
 
     # --------- Export / Strip ---------
-
     def export_subtitle(self, file: Path, rel_sub_index: int, out_dir: Path) -> Path:
-        ffmpeg = self.find_ffbin("ffmpeg")
         out_dir.mkdir(parents=True, exist_ok=True)
-        base = file.stem
-        out = out_dir / f"{base}.sub{rel_sub_index}.srt"
-        cmd = [ffmpeg, "-y", "-i", str(file), "-map", f"0:s:{rel_sub_index}", "-c:s", "srt", str(out)]
+
+        pr = self.probe_file(file)
+
+        sub_rel = -1
+        picked = None
+        for s in pr.streams:
+            if s.codec_type == "subtitle":
+                sub_rel += 1
+                if sub_rel == rel_sub_index:
+                    picked = s
+                    break
+        if picked is None:
+            raise RuntimeError(f"Kein Untertitel-Stream mit rel-idx {rel_sub_index} gefunden.")
+
+        codec = (picked.codec_name or "").lower()
+        text_codecs = {"subrip", "ass", "ssa", "text"}
+        is_text = codec in text_codecs
+
+        lang = (picked.language or "und").lower()
+        kind = "forced" if picked.forced else "full"
+        ext = "srt" if is_text else "sup"
+
+        out_path = out_dir / f"{file.stem}.{lang}.{kind}.{ext}"
+
+        ffmpeg = self.find_ffbin("ffmpeg")
+        cmd = [ffmpeg, "-y", "-v", "error", "-i", str(file), "-map", f"0:s:{rel_sub_index}"]
+        if is_text:
+            cmd += ["-c:s", "srt", str(out_path)]
+        else:
+            cmd += ["-c", "copy", str(out_path)]
+
         try:
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        except subprocess.CalledProcessError:
-            out = out.with_suffix(".sup")
-            cmd = [ffmpeg, "-y", "-i", str(file), "-map", f"0:s:{rel_sub_index}", "-c", "copy", str(out)]
-            subprocess.check_output(cmd, stderr=subprocess.STDOUT)
-        return out
+            proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=True)
+        except subprocess.CalledProcessError as e:
+            output = (e.stdout or b"").decode("utf-8", errors="replace")
+
+            try:
+                (out_path.with_suffix(out_path.suffix + ".log.txt")).write_text(
+                    "Command:\n" + " ".join(cmd) + "\n\nOutput:\n" + output, encoding="utf-8"
+                )
+            except Exception:
+                pass
+            raise RuntimeError(f"FFmpeg-Export fehlgeschlagen.\n\nBefehl:\n{' '.join(cmd)}\n\nAusgabe:\n{output}")
+
+        if not out_path.exists() or out_path.stat().st_size == 0:
+            raise RuntimeError("FFmpeg meldete Erfolg, aber die Ausgabedatei wurde nicht erstellt.")
+
+        return out_path
+
 
     def remove_subtitles_and_replace(self, file: Path, keep_kinds: Optional[List[str]] = None) -> Path:
         pr = self.probe_file(file)
