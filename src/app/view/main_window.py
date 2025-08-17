@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import sys
 from typing import Optional, List, TypedDict
 
 from PySide6.QtCore import Qt, QTimer, Slot
@@ -153,10 +154,11 @@ class MainWindow(QMainWindow):
         i18n.bus.language_changed.connect(self._retranslate)
         self._retranslate()
 
-        # Letzten Ordner laden
-        last = self.settings.value("last_folder", "")
-        if last and Path(last).exists():
-            self._load_folder(Path(last))
+        # Standardordner = Verzeichnis der Anwendung
+        self.default_dir = Path(sys.argv[0]).resolve().parent
+        self._load_folder(self.default_dir)
+        if hasattr(self.settings, "remove"):
+            self.settings.remove("last_folder")
 
         # Startgröße (60%) & Tabellenbreiten
         self._adjust_initial_size(splitter)
@@ -274,11 +276,12 @@ class MainWindow(QMainWindow):
     # ---------- Ordner & Streams ----------
 
     def _pick_folder(self):
-        path = QFileDialog.getExistingDirectory(self, t("common.folder.choose"))
+        path = QFileDialog.getExistingDirectory(
+            self, t("common.folder.choose"), str(self.default_dir)
+        )
         if not path:
             return
         self._load_folder(Path(path))
-        self.settings.setValue("last_folder", path)
 
     def _load_folder(self, folder: Path):
         self.folder_label.setText(str(folder))
