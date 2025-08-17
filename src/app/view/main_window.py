@@ -26,6 +26,7 @@ from app.controller.batch_controller import BatchController
 from app.service.notification_center import notification_center
 from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, ToastNotifier
 from app.view.toast_overlay import ToastOverlay
+from app.service.path_service import path_service
 
 
 class BatchStep(TypedDict, total=False):
@@ -237,7 +238,8 @@ class MainWindow(QMainWindow):
         i18n.bus.language_changed.connect(self._retranslate)
         self._retranslate()
 
-        self._update_current_folder_label(self.default_dir)
+        path_service.set_current_folder(self.default_dir)
+        self._update_current_folder_label()
         self._load_folder(self.default_dir)
 
         # Startgröße (60%) & Tabellenbreiten
@@ -269,12 +271,9 @@ class MainWindow(QMainWindow):
     def _on_notify_style_changed(self, style: str) -> None:
         self._notifier = self._make_notifier()
 
-    def _update_current_folder_label(self, path: Path | str) -> None:
-        """
-        Set the header label to: '<translated>: <normalized-path>'
-        Ensures a single space after the colon and removes any artifacts.
-        """
-        p = Path(path).resolve()
+    def _update_current_folder_label(self) -> None:
+        """Update header label to show the current output folder."""
+        p = path_service.get_output_folder()
         norm = os.path.normpath(str(p)).strip()
         self._current_folder_path = norm
         self._folder_label_text = f"{t('mw.current.folder')}: {norm}"
@@ -427,7 +426,8 @@ class MainWindow(QMainWindow):
         self._load_folder(Path(path))
 
     def _load_folder(self, folder: Path):
-        self._update_current_folder_label(folder)
+        path_service.set_current_folder(folder)
+        self._update_current_folder_label()
         self.video_list.clear()
         items = self.sub_ctrl.scan_folder(folder)
         for it in items:
@@ -525,19 +525,10 @@ class MainWindow(QMainWindow):
         rel_idx = self.stream_model.rows[row][1]
         return int(rel_idx)
 
-    # ---------- Export-Ziel ----------
-
     def _browse_export_dir(self):
         path = QFileDialog.getExistingDirectory(self, "Zielordner wählen")
         if path:
             self.edit_export_dir.setText(path)
-
-    def _resolve_export_dir(self, src_file: Path) -> Path:
-        if self.chk_custom_export_dir.isChecked():
-            p = self.edit_export_dir.text().strip()
-            if p:
-                return Path(p)
-        return src_file.parent / "subs_export"
 
     # ---------- Start-Button ----------
 
@@ -578,12 +569,6 @@ class MainWindow(QMainWindow):
             self._progress.setMinimumDuration(0)
             self._progress.canceled.connect(self.batch_ctrl.stop)
 
-            # Custom-Exportziel für Batch optional merken (Quick-Flag)
-            if self.chk_custom_export_dir.isChecked():
-                self.settings.setValue("batch_custom_export_dir", self.edit_export_dir.text().strip())
-            else:
-                self.settings.remove("batch_custom_export_dir")
-
             self._start_next_batch_step()
             return
 
@@ -600,9 +585,8 @@ class MainWindow(QMainWindow):
             if rel_idx is None:
                 QMessageBox.information(self, t("app.title"), t("mw.pick.subtitle.first"))
                 return
-            out_dir = self._resolve_export_dir(src)
             try:
-                out = self.sub_ctrl.export_stream(src, rel_idx, out_dir)
+                out = self.sub_ctrl.export_stream(src, rel_idx)
                 notification_center.success(t("toast.exported", path=str(out)))
             except Exception as e:
                 QMessageBox.critical(self, t("mw.export.fail.title"), f"{t('mw.export.fail.msg')}\n\n{e}")
