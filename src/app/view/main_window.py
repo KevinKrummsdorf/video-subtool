@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QApplication,
     QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QMessageBox, QSplitter, QStatusBar,
-    QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit
+    QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit, QMenu
 )
 from PySide6.QtWidgets import QSizePolicy
 
@@ -87,8 +87,13 @@ class MainWindow(QMainWindow):
 
         # --- Videoliste ---
         self.video_list = VideoListWidget(self.sub_ctrl.collect_videos_from_paths)
+        self.video_list.setSelectionMode(QListWidget.ExtendedSelection)
+        self.video_list.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.video_list.customContextMenuRequested.connect(self._on_vlist_context_menu)
+        self.video_list.installEventFilter(self)
         self.video_list.files_dropped.connect(self._on_files_dropped)
         self.video_list.currentItemChanged.connect(self._on_video_selected)
+        self.video_list.itemSelectionChanged.connect(self._update_video_actions_enabled)
 
         # --- Stream-Tabelle ---
         self.stream_model = StreamTableModel()
@@ -263,6 +268,10 @@ class MainWindow(QMainWindow):
                 getattr(self, "_folder_label_text", ""), Qt.ElideRight, self.folder_label.width()
             )
             self.folder_label.setText(elided)
+        elif obj is self.video_list and event.type() == QEvent.KeyPress:
+            if event.key() in (Qt.Key_Delete,):
+                self._remove_selected_files()
+                return True
         return super().eventFilter(obj, event)
 
     # ---------- Größe & Layout ----------
@@ -312,6 +321,17 @@ class MainWindow(QMainWindow):
         self.act_pick.triggered.connect(self._pick_folder)
         self.menu_file.addAction(self.act_pick)
 
+        self.menu_file.addSeparator()
+        self.act_remove_selected = QAction(t("mw.remove.selected"), self)
+        self.act_remove_selected.setShortcut(Qt.Key_Delete)
+        self.act_remove_selected.triggered.connect(self._remove_selected_files)
+        self.menu_file.addAction(self.act_remove_selected)
+
+        self.act_clear_list = QAction(t("mw.clear.list"), self)
+        self.act_clear_list.setShortcut("Ctrl+Shift+Del")
+        self.act_clear_list.triggered.connect(self._clear_video_list)
+        self.menu_file.addAction(self.act_clear_list)
+
         self.menu_edit = menubar.addMenu("")
         self.act_settings = QAction("", self)
         self.act_settings.triggered.connect(self._open_settings)
@@ -352,6 +372,10 @@ class MainWindow(QMainWindow):
         # Menüs
         self.menu_file.setTitle(t("menu.file"))
         self.act_pick.setText(t("common.folder.open"))
+        if hasattr(self, "act_remove_selected"):
+            self.act_remove_selected.setText(t("mw.remove.selected"))
+        if hasattr(self, "act_clear_list"):
+            self.act_clear_list.setText(t("mw.clear.list"))
         self.menu_edit.setTitle(t("menu.settings"))
         self.act_settings.setText(t("common.settings"))
         self.menu_help.setTitle(t("menu.help"))
@@ -389,6 +413,7 @@ class MainWindow(QMainWindow):
         if self.video_list.count() > 0:
             self.video_list.setCurrentRow(0)
         QTimer.singleShot(0, self._apply_table_layout)
+        self._update_video_actions_enabled()
 
     def _on_files_dropped(self, files: List[Path]) -> None:
         existing = {Path(self.video_list.item(i).data(Qt.UserRole)) for i in range(self.video_list.count())}
@@ -405,11 +430,27 @@ class MainWindow(QMainWindow):
             return
         if not self.video_list.currentItem():
             self.video_list.setCurrentItem(added[0])
+        self._update_video_actions_enabled()
+
+    def _on_vlist_context_menu(self, pos):
+        if self.video_list.count() == 0:
+            return
+        menu = QMenu(self)
+        act_remove = menu.addAction(t("mw.remove.selected"))
+        act_clear = menu.addAction(t("mw.clear.list"))
+        act_remove.setEnabled(self.video_list.selectedItems())
+        act_clear.setEnabled(self.video_list.count() > 0)
+        chosen = menu.exec_(self.video_list.mapToGlobal(pos))
+        if chosen == act_remove:
+            self._remove_selected_files()
+        elif chosen == act_clear:
+            self._clear_video_list()
 
     def _on_video_selected(self, curr: Optional[QListWidgetItem], prev: Optional[QListWidgetItem]):
         if not curr:
             self.stream_model.set_rows([])
             QTimer.singleShot(0, self._apply_table_layout)
+            self._update_video_actions_enabled()
             return
         file = Path(curr.data(Qt.UserRole))
         try:
@@ -422,6 +463,35 @@ class MainWindow(QMainWindow):
             rows = []
         self.stream_model.set_rows(rows)
         QTimer.singleShot(0, self._apply_table_layout)
+        self._update_video_actions_enabled()
+
+    def _remove_selected_files(self):
+        items = self.video_list.selectedItems()
+        if not items:
+            return
+        rows = sorted((self.video_list.row(it) for it in items), reverse=True)
+        current_removed = False
+        curr = self.video_list.currentItem()
+        for r in rows:
+            if self.video_list.item(r) is curr:
+                current_removed = True
+            self.video_list.takeItem(r)
+        if current_removed:
+            self.stream_model.set_rows([])
+        self._update_video_actions_enabled()
+
+    def _clear_video_list(self):
+        self.video_list.clear()
+        self.stream_model.set_rows([])
+        self._update_video_actions_enabled()
+
+    def _update_video_actions_enabled(self):
+        has_items = self.video_list.count() > 0
+        has_sel = len(self.video_list.selectedItems()) > 0
+        if hasattr(self, "act_remove_selected"):
+            self.act_remove_selected.setEnabled(has_sel)
+        if hasattr(self, "act_clear_list"):
+            self.act_clear_list.setEnabled(has_items)
 
     def _selected_row_rel_idx(self) -> Optional[int]:
         sel = self.stream_table.selectionModel()
