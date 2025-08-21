@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.3.0] - YYYY-MM-DD
+## [0.3.0] - 2025-08-17
 - Splash screen with controlled timing
 - Responsive main window scaling
 - Drag & drop support for files
