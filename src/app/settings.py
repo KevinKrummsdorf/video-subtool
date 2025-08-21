@@ -5,6 +5,7 @@ import json
 import os
 import platform
 from typing import Optional
+import base64
 
 ORG = "KevNetwork"
 APP = "VideoSubTool"
@@ -166,3 +167,30 @@ def custom_bin_path(name: str) -> Optional[str]:
     v = s.value(f"path_{name}", "", type=str) or ""
     v = v.strip()
     return v if v and Path(v).exists() else None
+
+# --- NEU: universelle Bytes-Helper (funktionieren mit QSettings und JSON-Fallback) ---
+def settings_set_bytes(key: str, data: bytes) -> None:
+    s = get_settings()
+    try:
+        # QSettings (PySide6) kann QByteArray/bytes direkt speichern
+        s.setValue(key, data)
+    except Exception:
+        # Fallback-Datei: als Base64-String speichern
+        s.setValue(key, base64.b64encode(data).decode("ascii"))
+
+def settings_get_bytes(key: str) -> bytes | None:
+    s = get_settings()
+    val = s.value(key, None)
+    if val is None:
+        return None
+    # QSettings gibt oft direkt QByteArray/bytes zurück
+    if isinstance(val, (bytes, bytearray)):
+        return bytes(val)
+    if isinstance(val, str):
+        # Fallback-Datei: Base64-String dekodieren
+        try:
+            return base64.b64decode(val)
+        except Exception:
+            return None
+    return None
+

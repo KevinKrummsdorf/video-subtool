@@ -26,6 +26,9 @@ from app.service.notification_center import notification_center
 from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, ToastNotifier
 from app.view.toast_overlay import ToastOverlay
 from app.service.path_service import path_service
+from PySide6.QtCore import QByteArray
+from app.settings import settings_get_bytes
+from app.settings import settings_set_bytes
 
 
 class BatchStep(TypedDict, total=False):
@@ -90,6 +93,22 @@ class MainWindow(QMainWindow):
 
         self._build_menu()
         self._build_ui()
+
+        # --- UI-State wiederherstellen (Fenster + Splitter) ---
+        try:
+            g = settings_get_bytes("ui/main/geometry")
+            if g:
+                self.restoreGeometry(QByteArray(g))
+            s = settings_get_bytes("ui/main/state")
+            if s:
+                self.restoreState(QByteArray(s))
+            sp = settings_get_bytes("ui/main/splitter")
+            if sp:
+                self.splitter.restoreState(QByteArray(sp))
+        except Exception:
+            # silently ignore restore issues
+            pass
+
 
     def _build_ui(self) -> None:
         # --- Topbar (Ordneranzeige) ---
@@ -198,18 +217,18 @@ class MainWindow(QMainWindow):
         right = QWidget()
         right.setLayout(rightbar)
 
-        splitter = QSplitter()
-        splitter.addWidget(left)
-        splitter.addWidget(right)
-        splitter.setStretchFactor(0, 1)
-        splitter.setStretchFactor(1, 2)
+        self.splitter = QSplitter()
+        self.splitter.addWidget(left)
+        self.splitter.addWidget(right)
+        self.splitter.setStretchFactor(0, 1)
+        self.splitter.setStretchFactor(1, 2)
 
         central = QWidget()
         main = QVBoxLayout(central)
         main.setContentsMargins(8, 6, 8, 8)  # insgesamt kompakter
         main.setSpacing(6)
         main.addWidget(topbar_w)
-        main.addWidget(splitter)
+        main.addWidget(self.splitter)
         self.setCentralWidget(central)
         self.setStatusBar(QStatusBar())
 
@@ -225,7 +244,7 @@ class MainWindow(QMainWindow):
         self._load_folder(self.default_dir)
 
         # Größe & Tabellenbreiten
-        self._adjust_initial_size(splitter)
+        self._adjust_initial_size(self.splitter)
         QTimer.singleShot(0, self._apply_table_layout)
         self.stream_model.modelReset.connect(self._apply_table_layout)
         self.stream_model.layoutChanged.connect(self._apply_table_layout)
@@ -753,3 +772,15 @@ class MainWindow(QMainWindow):
         else:
             notification_center.warn(t("mw.batch.done.partial", processed=str(processed), errors=str(errors)))
         self._start_next_batch_step()
+
+    def closeEvent(self, event):
+        # Fenster- & Splitter-Layout persistieren
+        try:
+            settings_set_bytes("ui/main/geometry", bytes(self.saveGeometry()))
+            settings_set_bytes("ui/main/state",    bytes(self.saveState()))
+            if hasattr(self, "splitter"):
+                settings_set_bytes("ui/main/splitter", bytes(self.splitter.saveState()))
+        except Exception:
+            pass
+        super().closeEvent(event)
+
