@@ -1,20 +1,20 @@
+# src/app/view/main_window.py
 from __future__ import annotations
 import os
 import sys
 from pathlib import Path
 from typing import Optional, List, TypedDict
 
-from PySide6.QtCore import Qt, QTimer, Slot, Signal, QEvent
+from PySide6.QtCore import Qt, QTimer, Slot, Signal, QEvent, QByteArray
 from PySide6.QtGui import QAction, QFontMetrics
-from PySide6.QtWidgets import QMessageBox
 from PySide6.QtWidgets import (
-    QApplication,
-    QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout, QPushButton,
-    QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QSplitter, QStatusBar,
-    QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit, QMenu, QSizePolicy
+    QApplication, QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout,
+    QPushButton, QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox,
+    QSplitter, QStatusBar, QProgressDialog, QMenuBar, QHeaderView, QCheckBox,
+    QLineEdit, QMenu, QSizePolicy, QMessageBox
 )
 
-from app.settings import get_settings, notify_style_default
+from app.settings import get_settings, notify_style_default, settings_get_bytes, settings_set_bytes
 from app.i18n import t
 from app import i18n
 from app.view.stream_table_model import StreamTableModel
@@ -26,9 +26,6 @@ from app.service.notification_center import notification_center
 from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, ToastNotifier
 from app.view.toast_overlay import ToastOverlay
 from app.service.path_service import path_service
-from PySide6.QtCore import QByteArray
-from app.settings import settings_get_bytes
-from app.settings import settings_set_bytes
 
 
 class BatchStep(TypedDict, total=False):
@@ -39,7 +36,6 @@ class BatchStep(TypedDict, total=False):
 
 class VideoListWidget(QListWidget):
     """List widget that accepts external video file drops."""
-
     files_dropped = Signal(list)
 
     def __init__(self, collector, parent=None):
@@ -54,19 +50,19 @@ class VideoListWidget(QListWidget):
         paths = [Path(u.toLocalFile()) for u in e.mimeData().urls()]
         return self._collector(paths)
 
-    def dragEnterEvent(self, e):  # noqa: N802 (Qt override)
+    def dragEnterEvent(self, e):  # noqa: N802
         if self._collect(e):
             e.acceptProposedAction()
         else:
             e.ignore()
 
-    def dragMoveEvent(self, e):  # noqa: N802 (Qt override)
+    def dragMoveEvent(self, e):  # noqa: N802
         if self._collect(e):
             e.acceptProposedAction()
         else:
             e.ignore()
 
-    def dropEvent(self, e):  # noqa: N802 (Qt override)
+    def dropEvent(self, e):  # noqa: N802
         files = self._collect(e)
         if files:
             self.files_dropped.emit(files)
@@ -103,17 +99,14 @@ class MainWindow(QMainWindow):
             if s:
                 self.restoreState(QByteArray(s))
             sp = settings_get_bytes("ui/main/splitter")
-            if sp:
+            if sp and hasattr(self, "splitter"):
                 self.splitter.restoreState(QByteArray(sp))
         except Exception:
-            # silently ignore restore issues
-            pass
-
+            pass  # still starten
 
     def _build_ui(self) -> None:
         # --- Topbar (Ordneranzeige) ---
         self.folder_label = QLabel()
-        # Pfad-Label: einkanalig, kompakt, elidiert
         self.folder_label.setWordWrap(False)
         self.folder_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         self.folder_label.setContentsMargins(0, 0, 0, 0)
@@ -123,6 +116,7 @@ class MainWindow(QMainWindow):
         self.folder_label.setMinimumHeight(line_h + 2)
         self.folder_label.setMaximumHeight(line_h + 2)
         self.folder_label.installEventFilter(self)
+        self._folder_label_text: str = ""
 
         # --- Videoliste ---
         self.video_list = VideoListWidget(self.sub_ctrl.collect_videos_from_paths)
@@ -140,8 +134,6 @@ class MainWindow(QMainWindow):
         self.stream_table.setModel(self.stream_model)
         self.stream_table.setSelectionBehavior(QTableView.SelectRows)
         self.stream_table.setSelectionMode(QTableView.SingleSelection)
-
-        # Tabelle: Look & Feel
         self.stream_table.verticalHeader().setVisible(False)
         self.stream_table.setAlternatingRowColors(True)
         self.stream_table.setWordWrap(False)
@@ -152,7 +144,7 @@ class MainWindow(QMainWindow):
         h.setSectionsMovable(True)
         h.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        # --- Optionen-Bereich ---
+        # --- Optionen ---
         self.chk_export_selected = QCheckBox("Ausgewählten Sub exportieren")
         self.chk_export_selected.setChecked(True)
 
@@ -182,7 +174,7 @@ class MainWindow(QMainWindow):
         # --- kompakter Header-Container ---
         topbar_w = QWidget()
         topbar = QHBoxLayout(topbar_w)
-        topbar.setContentsMargins(0, 2, 0, 2)   # enger
+        topbar.setContentsMargins(0, 2, 0, 2)
         topbar.setSpacing(8)
         topbar.addWidget(self.folder_label, 1)
         topbar_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -225,7 +217,7 @@ class MainWindow(QMainWindow):
 
         central = QWidget()
         main = QVBoxLayout(central)
-        main.setContentsMargins(8, 6, 8, 8)  # insgesamt kompakter
+        main.setContentsMargins(8, 6, 8, 8)
         main.setSpacing(6)
         main.addWidget(topbar_w)
         main.addWidget(self.splitter)
@@ -233,9 +225,7 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
 
         # Standardordner, i18n, erstes Laden
-        self._folder_label_text: str = ""   # unverkurzte Anzeige (für Eliding)
         self.default_dir = Path(sys.argv[0]).resolve().parent
-
         i18n.bus.language_changed.connect(self._retranslate)
         self._retranslate()
 
@@ -259,10 +249,7 @@ class MainWindow(QMainWindow):
 
     # --- Hilfsfunktionen ---
     def _get_current_folder_path(self) -> Path:
-        """
-        Liefert den im UI dargestellten Arbeitsordner (robust).
-        Primär nutzen wir path_service, diese Funktion ist Fallback/Komfort.
-        """
+        """Bevorzugt path_service, fällt sonst auf Label/Fallback zurück."""
         try:
             return path_service.get_output_folder()
         except Exception:
@@ -282,7 +269,7 @@ class MainWindow(QMainWindow):
         rel_idx = self.stream_model.rows[row][1]
         return int(rel_idx)
 
-    # --- Menü-Aktionen (werden in _build_menu() verbunden) ---
+    # --- Menü-Aktionen ---
     def _export_selected(self):
         item = self.video_list.currentItem()
         if not item:
@@ -295,7 +282,6 @@ class MainWindow(QMainWindow):
 
         file = Path(item.data(Qt.UserRole))
         out_dir = path_service.get_output_folder()  # Export in aktuellen Arbeitsordner
-
         try:
             out = self.sub_ctrl.export_stream(file, rel_idx, out_dir)
         except Exception as e:
@@ -303,7 +289,8 @@ class MainWindow(QMainWindow):
             return
 
         msg = t("mw.exported", path=str(out))
-        (self.notify.success(msg) if hasattr(self, "notify") else self.statusBar().showMessage(msg, 5000))
+        (self.notify.success(msg) if hasattr(self, "notify")
+         else self.statusBar().showMessage(msg, 5000))
 
     def _strip_and_replace(self):
         item = self.video_list.currentItem()
@@ -324,7 +311,8 @@ class MainWindow(QMainWindow):
 
         self._on_video_selected(self.video_list.currentItem(), None)
         msg = t("mw.replaced", name=out.name)
-        (self.notify.success(msg) if hasattr(self, "notify") else self.statusBar().showMessage(msg, 5000))
+        (self.notify.success(msg) if hasattr(self, "notify")
+         else self.statusBar().showMessage(msg, 5000))
 
     def _batch_strip_folder(self):
         keep = self.keep_combo.currentData() or None
@@ -356,9 +344,7 @@ class MainWindow(QMainWindow):
         p = path_service.get_output_folder()
         norm = os.path.normpath(str(p)).strip()
         self._folder_label_text = f"{t('mw.current.folder')}: {norm}"
-
         fm = QFontMetrics(self.folder_label.font())
-        # kleine Reserve, damit Padding/Margins einkalkuliert sind
         elided = fm.elidedText(self._folder_label_text, Qt.ElideRight, max(50, self.folder_label.width() - 12))
         self.folder_label.setText(elided)
 
@@ -373,7 +359,7 @@ class MainWindow(QMainWindow):
                 return True
         return super().eventFilter(obj, event)
 
-    def resizeEvent(self, e):  # sorgt ebenfalls für korrektes Eliding
+    def resizeEvent(self, e):
         try:
             fm = QFontMetrics(self.folder_label.font())
             elided = fm.elidedText(self._folder_label_text, Qt.ElideRight, max(50, self.folder_label.width() - 12))
@@ -419,37 +405,30 @@ class MainWindow(QMainWindow):
         self.keep_combo.setEnabled(enable)
 
     # ---------- Menü ----------
-
     def _build_menu(self):
         from PySide6.QtGui import QKeySequence  # optional; Strings gehen auch
-
         menubar = QMenuBar(self)
         self.setMenuBar(menubar)
 
-        # ---- Datei ----
+        # Datei
         self.menu_file = menubar.addMenu("")
 
-        # Open (Ctrl+O)
         self.act_pick = QAction("", self)
         self.act_pick.setShortcut(QKeySequence("Ctrl+O"))
         self.act_pick.triggered.connect(self._pick_folder)
         self.menu_file.addAction(self.act_pick)
-
         self.menu_file.addSeparator()
 
-        # Export selected (Ctrl+E)
         self.act_export_selected = QAction(t("mw.export.selected"), self)
         self.act_export_selected.setShortcut("Ctrl+E")
         self.act_export_selected.triggered.connect(self._export_selected)
         self.menu_file.addAction(self.act_export_selected)
 
-        # Export all (Ctrl+Shift+E)
         self.act_batch_export = QAction(t("mw.batch.export"), self)
         self.act_batch_export.setShortcut("Ctrl+Shift+E")
         self.act_batch_export.triggered.connect(self._batch_export_folder)
         self.menu_file.addAction(self.act_batch_export)
 
-        # Remove/Replace (Ctrl+R)
         self.act_strip_replace = QAction(t("mw.strip.replace"), self)
         self.act_strip_replace.setShortcut("Ctrl+R")
         self.act_strip_replace.triggered.connect(self._strip_and_replace)
@@ -457,46 +436,41 @@ class MainWindow(QMainWindow):
 
         self.menu_file.addSeparator()
 
-        # Remove selected from list (Del)
         self.act_remove_selected = QAction("", self)
         self.act_remove_selected.setShortcut(Qt.Key_Delete)
         self.act_remove_selected.triggered.connect(self._remove_selected_files)
         self.menu_file.addAction(self.act_remove_selected)
 
-        # Clear list (Ctrl+Shift+Del)
         self.act_clear_list = QAction("", self)
         self.act_clear_list.setShortcut(QKeySequence("Ctrl+Shift+Del"))
         self.act_clear_list.triggered.connect(self._clear_video_list)
         self.menu_file.addAction(self.act_clear_list)
 
-        # ---- Edit ----
+        # Einstellungen
         self.menu_edit = menubar.addMenu("")
-
-        # Settings (F2)
         self.act_settings = QAction("", self)
         self.act_settings.setShortcut(Qt.Key_F2)
         self.act_settings.triggered.connect(self._open_settings)
         self.menu_edit.addAction(self.act_settings)
 
-        # ---- Help (F1) ----
+        # Hilfe
         self.menu_help = menubar.addMenu("")
         self.act_about = QAction("", self)
         self.act_about.setShortcut(Qt.Key_F1)
         self.act_about.triggered.connect(self._about)
         self.menu_help.addAction(self.act_about)
 
-        # ---- Batch (Strg+B) ----
+        # Batch (Strg+B)
         self.act_batch_strip = QAction(t("mw.batch.strip"), self)
         self.act_batch_strip.setShortcut("Ctrl+B")
         self.act_batch_strip.triggered.connect(self._batch_strip_folder)
         self.menu_file.addAction(self.act_batch_strip)
 
     def _retranslate(self, *_):
-        # Titel & Top-Leiste
+        # Titel & Pfadleiste
         self.setWindowTitle(t("app.title"))
-        # Label-Text neu setzen (unverkürzt) und eliden
-        current = os.path.normpath(str(path_service.get_output_folder()))
-        self._folder_label_text = f"{t('mw.current.folder')}: {current}"
+        cur = os.path.normpath(str(path_service.get_output_folder())) if path_service else ""
+        self._folder_label_text = f"{t('mw.current.folder')}: {cur}"
         fm = QFontMetrics(self.folder_label.font())
         elided = fm.elidedText(self._folder_label_text, Qt.ElideRight, max(50, self.folder_label.width() - 12))
         self.folder_label.setText(elided)
@@ -509,7 +483,7 @@ class MainWindow(QMainWindow):
         self.keep_combo.setItemText(0, t("mw.keep.forced"))
         self.keep_combo.setItemText(1, t("mw.keep.full"))
 
-        # Optionen (Checkboxen + Buttons)
+        # Optionen
         self.chk_export_selected.setText(t("mw.opt.export_selected"))
         self.chk_strip_keep_rule.setText(t("mw.opt.strip_with_rule"))
         self.chk_remove_all.setText(t("mw.opt.remove_all"))
@@ -518,20 +492,26 @@ class MainWindow(QMainWindow):
         self.chk_apply_folder.setText(t("mw.opt.apply_to_folder"))
         self.btn_start.setText(t("mw.start"))
 
-        # Menüs
+        # Menüs / Actions
         self.menu_file.setTitle(t("menu.file"))
+        self.menu_edit.setTitle(t("menu.settings"))
+        self.menu_help.setTitle(t("menu.help"))
+
         self.act_pick.setText(t("common.folder.open"))
+        self.act_export_selected.setText(t("mw.export.selected"))
+        self.act_batch_export.setText(t("mw.batch.export"))
+        self.act_strip_replace.setText(t("mw.strip.replace"))
+        self.act_batch_strip.setText(t("mw.batch.strip"))
+
         if hasattr(self, "act_remove_selected"):
             self.act_remove_selected.setText(t("mw.remove.selected"))
         if hasattr(self, "act_clear_list"):
             self.act_clear_list.setText(t("mw.clear.list"))
-        self.menu_edit.setTitle(t("menu.settings"))
+
         self.act_settings.setText(t("common.settings"))
-        self.menu_help.setTitle(t("menu.help"))
         self.act_about.setText(t("common.about"))
 
     # ---------- Settings / About ----------
-
     def _open_settings(self):
         dlg = SettingsDialog(self)
         dlg.notify_style_changed.connect(self._on_notify_style_changed)
@@ -542,11 +522,8 @@ class MainWindow(QMainWindow):
         AboutDialog(self).exec()
 
     # ---------- Ordner & Streams ----------
-
     def _pick_folder(self):
-        path = QFileDialog.getExistingDirectory(
-            self, t("common.folder.choose"), str(self.default_dir)
-        )
+        path = QFileDialog.getExistingDirectory(self, t("common.folder.choose"), str(self.default_dir))
         if not path:
             return
         self._load_folder(Path(path))
@@ -649,7 +626,6 @@ class MainWindow(QMainWindow):
             self.edit_export_dir.setText(path)
 
     # ---------- Start-Button ----------
-
     @Slot()
     def _on_start_clicked(self):
         if not any([self.chk_export_selected.isChecked(),
@@ -672,9 +648,7 @@ class MainWindow(QMainWindow):
             if self.chk_remove_all.isChecked():
                 self._batch_queue.append(BatchStep(mode="strip", keep=None, export_rel_idx=None))
             elif self.chk_strip_keep_rule.isChecked():
-                keep = self.keep_combo.currentData()
-                if not keep:
-                    keep = "forced"
+                keep = self.keep_combo.currentData() or "forced"
                 self._batch_queue.append(BatchStep(mode="strip", keep=keep, export_rel_idx=None))
 
             if not self._batch_queue:
@@ -727,7 +701,6 @@ class MainWindow(QMainWindow):
                 return
 
     # ---------- Batch-Kette ----------
-
     def _collect_current_folder_files(self) -> List[Path]:
         files: List[Path] = []
         for i in range(self.video_list.count()):
@@ -783,4 +756,3 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         super().closeEvent(event)
-

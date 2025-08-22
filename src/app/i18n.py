@@ -31,6 +31,16 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "common.done.processed": "Verarbeitet",
         "common.done.errors": "Fehler",
 
+        # Datei-Menü Actions
+        "mw.export.selected": "Ausgewählten Sub exportieren",
+        "mw.batch.export": "Batch: Subs exportieren (ganzer Ordner)",
+        "mw.strip.replace": "Subs entfernen & Original ersetzen",
+        "mw.batch.strip": "Batch: Subs entfernen (ganzer Ordner)",
+
+        #Listen-Operationen
+        "mw.remove.selected": "Ausgewählte entfernen",
+        "mw.clear.list": "Liste leeren",
+
         # Menüs
         "menu.file": "&Datei",
         "menu.settings": "&Einstellungen",
@@ -97,19 +107,18 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "sd.title": "Einstellungen",
         "sd.use.bundled": "Bevorzugt mitgelieferte FFmpeg-Binaries verwenden (falls vorhanden)",
         "sd.ffmpeg.path": "Pfad zu ffmpeg:",
-          "sd.ffprobe.path": "Pfad zu ffprobe:",
-          "sd.pick.file": "Datei wählen",
-          "sd.saved": "Einstellungen gespeichert.",
-          "sd.lang": "Sprache:",
-          "sd.lang.de": "Deutsch",
-          "sd.lang.en": "Englisch",
-          "sd.notify.title": "Benachrichtigungen",
-          "sd.notify.statusbar": "StatusBar-Nachrichten",
-          "sd.notify.dialog": "Dialogfenster (Alerts)",
-          "sd.notify.toast": "Toast/Overlay",
-
-          "toast.exported": "Exportiert: {path}",
-          "toast.replaced": "Ersetzt: {name}",
+        "sd.ffprobe.path": "Pfad zu ffprobe:",
+        "sd.pick.file": "Datei wählen",
+        "sd.saved": "Einstellungen gespeichert.",
+        "sd.lang": "Sprache:",
+        "sd.lang.de": "Deutsch",
+        "sd.lang.en": "Englisch",
+        "sd.notify.title": "Benachrichtigungen",
+        "sd.notify.statusbar": "StatusBar-Nachrichten",
+        "sd.notify.dialog": "Dialogfenster (Alerts)",
+        "sd.notify.toast": "Toast/Overlay",
+        "toast.exported": "Exportiert: {path}",
+        "toast.replaced": "Ersetzt: {name}",
 
         # About-Dialog
         "about.title": "Über …",
@@ -157,6 +166,16 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "common.done": "Batch finished",
         "common.done.processed": "Processed",
         "common.done.errors": "Errors",
+
+        #File menu actions
+        "mw.export.selected": "Export selected subtitle",
+        "mw.batch.export": "Batch: export subs (entire folder)",
+        "mw.strip.replace": "Remove subs & replace original",
+        "mw.batch.strip": "Batch: remove subs (entire folder)",
+
+        # List operations
+        "mw.remove.selected": "Remove selected",
+        "mw.clear.list": "Clear list",
 
         # Menus
         "menu.file": "&File",

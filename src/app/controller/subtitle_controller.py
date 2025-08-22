@@ -1,7 +1,7 @@
 # src/app/controller/subtitle_controller.py
 from __future__ import annotations
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Tuple, Optional, Callable
 
 from app.model.video_item import VideoItem, is_video
 from app.service.ffmpeg_service import FfmpegService
@@ -70,11 +70,21 @@ class SubtitleController:
                 ))
         return rows
 
-    def export_stream(self, file: Path, rel_sub_index: int) -> Path:
-        out_dir = self.path_srv.get_output_folder()
-        return self.ffmpeg.export_subtitle(file, rel_sub_index, out_dir)
+    def export_stream(
+        self,
+        file: Path,
+        rel_idx: int,
+        out_dir: Optional[Path] = None,
+        on_progress: Optional[Callable[[int], None]] = None,
+    ) -> Path:
+        target = out_dir or file.parent / "subs_export"
+        return self.ffmpeg.export_subtitle(file, rel_idx, target, on_progress=on_progress)
 
-    def strip_subs(self, file: Path, keep: Optional[str]) -> Path:
+    def strip_subs(
+        self,
+        file: Path,
+        keep: Optional[str] = None,
+        on_progress: Optional[Callable[[int], None]] = None,
+    ) -> Path:
         keep_kinds = [keep] if keep else None
-        out_dir = self.path_srv.get_output_folder()
-        return self.ffmpeg.remove_subtitles_and_replace(file, out_dir, keep_kinds=keep_kinds)
+        return self.ffmpeg.remove_subtitles_and_replace(file, keep_kinds=keep_kinds, on_progress=on_progress)
