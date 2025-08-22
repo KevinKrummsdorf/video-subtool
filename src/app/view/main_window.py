@@ -2,11 +2,13 @@
 from __future__ import annotations
 import os
 import sys
+import platform
+import subprocess
 from pathlib import Path
 from typing import Optional, List, TypedDict
 
 from PySide6.QtCore import Qt, QTimer, Slot, Signal, QEvent, QByteArray
-from PySide6.QtGui import QAction, QFontMetrics
+from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout,
     QPushButton, QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox,
@@ -144,6 +146,10 @@ class MainWindow(QMainWindow):
         h.setSectionsMovable(True)
         h.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
+        # Kontextmenü für die Stream-Tabelle
+        self.stream_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.stream_table.customContextMenuRequested.connect(self._on_stream_context_menu)
+
         # --- Optionen ---
         self.chk_export_selected = QCheckBox("Ausgewählten Sub exportieren")
         self.chk_export_selected.setChecked(True)
@@ -268,6 +274,101 @@ class MainWindow(QMainWindow):
         row = sel.selectedRows()[0].row()
         rel_idx = self.stream_model.rows[row][1]
         return int(rel_idx)
+
+    def _selected_row_info(self) -> Optional[dict]:
+        """Liefert Infos zur ausgewählten Stream-Zeile (oder None)."""
+        sel = self.stream_table.selectionModel()
+        if not sel or not sel.hasSelection():
+            return None
+        row = sel.selectedRows()[0].row()
+        # rows schema: (abs_idx, rel_idx, codec, lang, title, class, default)
+        try:
+            abs_idx, rel_idx, codec, lang, title, cls, default = self.stream_model.rows[row]
+        except Exception:
+            return None
+        return {
+            "abs_idx": abs_idx,
+            "rel_idx": rel_idx,
+            "codec": codec or "",
+            "lang": lang or "",
+            "title": title or "",
+            "class": cls or "",
+            "default": default or "",
+        }
+
+    def _copy_to_clipboard(self, text: str) -> None:
+        cb = QGuiApplication.clipboard()
+        cb.setText(text or "")
+
+    def _open_in_file_manager(self, file_path: Path) -> None:
+        try:
+            if platform.system() == "Windows":
+                # Explorer mit selektierter Datei, wenn möglich
+                if file_path.exists():
+                    subprocess.run(["explorer", "/select,", str(file_path)], check=False)
+                else:
+                    subprocess.run(["explorer", str(file_path.parent)], check=False)
+            else:
+                # Linux/macOS: Ordner öffnen
+                folder = file_path.parent if file_path.is_file() else file_path
+                if platform.system() == "Darwin":
+                    subprocess.run(["open", str(folder)], check=False)
+                else:
+                    subprocess.run(["xdg-open", str(folder)], check=False)
+        except Exception:
+            pass
+
+    # --- Kontextmenü: Stream-Tabelle ---
+    def _on_stream_context_menu(self, pos):
+        info = self._selected_row_info()
+        item = self.video_list.currentItem()
+        if info is None or item is None:
+            return
+        current_file = Path(item.data(Qt.UserRole))
+
+        menu = QMenu(self)
+
+        # Export this subtitle
+        act_export = menu.addAction(t("mw.export.selected"))
+        # Copy ffmpeg -map
+        act_map = menu.addAction("FFmpeg -map kopieren")
+        # Copy stream info
+        act_copy = menu.addAction("Stream-Infos kopieren")
+        menu.addSeparator()
+        # Open in file manager & copy path
+        act_open = menu.addAction("Im Explorer/Ordner öffnen")
+        act_copy_path = menu.addAction("Dateipfad kopieren")
+
+        chosen = menu.exec_(self.stream_table.viewport().mapToGlobal(pos))
+        if not chosen:
+            return
+
+        if chosen == act_export:
+            self._export_selected()
+            return
+
+        if chosen == act_map:
+            self._copy_to_clipboard(f"0:s:{info['rel_idx']}")
+            notification_center.success("Kopiert: -map 0:s:{idx}".format(idx=info["rel_idx"]))
+            return
+
+        if chosen == act_copy:
+            txt = (
+                f"rel={info['rel_idx']}  codec={info['codec']}  lang={info['lang']}\n"
+                f"title={info['title']}  class={info['class']}  default={info['default']}"
+            )
+            self._copy_to_clipboard(txt)
+            notification_center.success(t("sd.saved"))
+            return
+
+        if chosen == act_open:
+            self._open_in_file_manager(current_file)
+            return
+
+        if chosen == act_copy_path:
+            self._copy_to_clipboard(str(current_file))
+            notification_center.success("Pfad kopiert")
+            return
 
     # --- Menü-Aktionen ---
     def _export_selected(self):
