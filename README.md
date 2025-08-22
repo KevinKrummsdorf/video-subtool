@@ -43,11 +43,11 @@ resources/ffmpeg/windows/ffprobe.exe
 ### Release build (optimized GUI)
 Default: fast onedir build
 ```powershell
-\.\build.ps1 -Task release
+.\build.ps1 -Task release
 ```
 Optional: single-file build (slower startup, self-extracting EXE)
 ```powershell
-\.\build.ps1 -Task release -OneFile:$true
+.\build.ps1 -Task release -OneFile:$true
 ```
 Artifacts appear in the `dist/` directory.
 
