@@ -1,4 +1,6 @@
+# src/app/service/ffmpeg_service.py
 from __future__ import annotations
+
 import json
 import os
 import platform
@@ -13,7 +15,6 @@ from app.settings import custom_bin_path, use_bundled_preferred
 from app.model.probe_result import ProbeResult
 from app.model.probe_stream import ProbeStream
 
-
 _TIME_RE = re.compile(r"time=(\d+):(\d+):(\d+(?:\.\d+)?)")  # HH:MM:SS(.ms)
 
 
@@ -22,54 +23,111 @@ def _time_to_seconds(h: str, m: str, s: str) -> float:
 
 
 class FfmpegService:
-    """Kapselt Aufrufe von ffprobe/ffmpeg, inkl. Progress-Parsing."""
+    """Kapselt Aufrufe von ffprobe/ffmpeg, inkl. Progress-Parsing und Binärauflösung."""
 
-    # --------- Binärsuche ---------
+    # -------------------- Pfad-Helfer --------------------
 
-    def _bundle_dir(self) -> Path:
-        return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[3]))
+    def _platform_tag(self) -> str:
+        return "windows" if platform.system().lower().startswith("win") else "linux"
+
+    def _bundle_base_dir(self) -> Path:
+        """
+        Basisordner, unter dem unsere mitgelieferten Binaries liegen.
+        - Dev/Poetry: <repo>/resources/ffmpeg/<plat>/
+        - PyInstaller onedir: <dist>/<App>/_internal/resources/ffmpeg/<plat>/
+        - PyInstaller onefile: <_MEIPASS>/resources/ffmpeg/<plat>/
+        """
+        if getattr(sys, "frozen", False):
+            # onefile: _MEIPASS, onedir: <App>/.../_internal/...
+            root = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+            # In onedir liegt „_internal“ neben der exe – realtiv dazu die resources
+            if "_internal" not in str(root):
+                # exe liegt z.B. in <dist>/<App>/ ; resources in <dist>/<App>/_internal/resources
+                maybe = Path(sys.executable).parent / "_internal"
+                if maybe.exists():
+                    root = maybe
+        else:
+            # im Dev: src/app/service/... -> zurück zur Repo-Wurzel
+            root = Path(__file__).resolve().parents[3]
+
+        return root / "resources" / "ffmpeg"
+
+    def _vendor_dir(self) -> Path:
+        return self._bundle_base_dir() / self._platform_tag()
 
     def _vendor_ffbin(self, name: str) -> Optional[Path]:
-        plat = "windows" if platform.system() == "Windows" else "linux"
-        exe = name + (".exe" if plat == "windows" else "")
-        candidate = self._bundle_dir() / "resources" / "ffmpeg" / plat / exe
-        return candidate if candidate.exists() else None
+        exe = name + (".exe" if self._platform_tag() == "windows" else "")
+        p = self._vendor_dir() / exe
+        return p if p.exists() else None
 
-    def _chmod_exec(self, p: Path):
+    def _chmod_exec(self, p: Path) -> None:
         try:
             os.chmod(p, 0o755)
         except Exception:
             pass
 
-    def find_ffbin(self, name: str) -> str:
-        custom = custom_bin_path(name)
-        if custom and Path(custom).exists():
-            return custom
+    # -------------------- Auswahl der Binärdatei --------------------
 
+    def find_ffbin(self, name: str) -> str:
+        """
+        Liefert den Pfad zu ffmpeg/ffprobe unter Beachtung der gewünschten Priorität:
+        - prefer_bundled=True  -> bundled > custom > system
+        - prefer_bundled=False -> custom > system > bundled
+        """
         prefer_bundled = use_bundled_preferred()
+        custom = custom_bin_path(name)
+        vendor = self._vendor_ffbin(name)
+        system = shutil.which(name)
+
+        # Normalisiere: Wenn String -> Path, und Existenz prüfen
+        custom_ok = bool(custom and Path(custom).exists())
+        vendor_ok = bool(vendor and vendor.exists())
+        system_ok = bool(system)
+
         if prefer_bundled:
-            vend = self._vendor_ffbin(name)
-            if vend:
-                self._chmod_exec(vend)
-                return str(vend)
-            sysbin = shutil.which(name)
-            if sysbin:
-                return sysbin
+            if vendor_ok:
+                self._chmod_exec(vendor)  # macht unter Linux ausführbar
+                return str(vendor)
+            if custom_ok:
+                return str(custom)
+            if system_ok:
+                return str(system)
         else:
-            sysbin = shutil.which(name)
-            if sysbin:
-                return sysbin
-            vend = self._vendor_ffbin(name)
-            if vend:
-                self._chmod_exec(vend)
-                return str(vend)
+            if custom_ok:
+                return str(custom)
+            if system_ok:
+                return str(system)
+            if vendor_ok:
+                self._chmod_exec(vendor)
+                return str(vendor)
 
         raise FileNotFoundError(
-            f"{name} nicht gefunden. Setze Pfad in den Einstellungen, "
+            f"{name} nicht gefunden. Setze einen Pfad in den Einstellungen, "
             f"installiere es systemweit oder lege es unter resources/ffmpeg/<platform>/ ab."
         )
 
-    # --------- ffprobe ---------
+    # Eine reine Herkunfts-Erkennung ohne find_ffbin-Aufruf (spiegelt die Settings-Logik)
+    def detect_origin(self) -> str:
+        prefer_bundled = use_bundled_preferred()
+        ff_custom = custom_bin_path("ffmpeg")
+        fp_custom = custom_bin_path("ffprobe")
+        has_custom = bool(ff_custom and Path(ff_custom).exists()) and bool(fp_custom and Path(fp_custom).exists())
+        vendor_ff = self._vendor_ffbin("ffmpeg")
+        vendor_fp = self._vendor_ffbin("ffprobe")
+        has_vendor = bool(vendor_ff) and bool(vendor_fp)
+        has_system = bool(shutil.which("ffmpeg")) and bool(shutil.which("ffprobe"))
+
+        if prefer_bundled and has_vendor:
+            return "bundled"
+        if not prefer_bundled and has_custom:
+            return "custom"
+        if has_system:
+            return "system"
+        if has_vendor:
+            return "bundled"
+        return "missing"
+
+    # -------------------- ffprobe --------------------
 
     def run_ffprobe(self, file: Path) -> Dict[str, Any]:
         ffprobe = self.find_ffbin("ffprobe")
@@ -78,16 +136,8 @@ class FfmpegService:
         return json.loads(out)
 
     def probe_duration_seconds(self, file: Path) -> Optional[float]:
-        """
-        Holt die Container-Dauer in Sekunden (float). Kann None sein (z.B. bei kaputten Dateien).
-        """
         ffprobe = self.find_ffbin("ffprobe")
-        cmd = [
-            ffprobe, "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=nk=1:nw=1",
-            str(file)
-        ]
+        cmd = [ffprobe, "-v", "error", "-show_entries", "format=duration", "-of", "default=nk=1:nw=1", str(file)]
         try:
             out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
             txt = out.decode("utf-8", "ignore").strip()
@@ -104,22 +154,24 @@ class FfmpegService:
             if not ctype:
                 continue
             tags = s.get("tags", {}) or {}
-            result.append(ProbeStream(
-                index=int(s.get("index", -1)),
-                codec_type=ctype,
-                codec_name=s.get("codec_name"),
-                language=tags.get("language") or tags.get("LANGUAGE"),
-                title=tags.get("title") or tags.get("TITLE"),
-                forced=str(s.get("disposition", {}).get("forced", 0)) == "1",
-                default=str(s.get("disposition", {}).get("default", 0)) == "1",
-            ))
+            result.append(
+                ProbeStream(
+                    index=int(s.get("index", -1)),
+                    codec_type=ctype,
+                    codec_name=s.get("codec_name"),
+                    language=tags.get("language") or tags.get("LANGUAGE"),
+                    title=tags.get("title") or tags.get("TITLE"),
+                    forced=str(s.get("disposition", {}).get("forced", 0)) == "1",
+                    default=str(s.get("disposition", {}).get("default", 0)) == "1",
+                )
+            )
         return result
 
     def probe_file(self, file: Path) -> ProbeResult:
         data = self.run_ffprobe(file)
         return ProbeResult(path=file, streams=self.parse_streams(data))
 
-    # --------- Utilities ---------
+    # -------------------- Utilities --------------------
 
     def _ffmpeg_type_letter(self, codec_type: str) -> str:
         return {"video": "v", "audio": "a", "subtitle": "s", "data": "d", "attachment": "t"}.get(codec_type, "d")
@@ -141,24 +193,18 @@ class FfmpegService:
                 maps.append(f"0:{self._ffmpeg_type_letter(s.codec_type)}:{rel}")
         return maps
 
-    # --------- Gemeinsame ffmpeg-Runner mit Progress ---------
+    # -------------------- Gemeinsamer ffmpeg-Runner (Progress) --------------------
 
     def _run_ffmpeg_with_progress(
         self,
         cmd: List[str],
         input_file: Optional[Path],
-        on_progress: Optional[Callable[[int], None]] = None
+        on_progress: Optional[Callable[[int], None]] = None,
     ) -> None:
-        """
-        Führt ffmpeg aus und parst Fortschritt aus stderr. Berechnet % anhand der Container-Dauer.
-        Ruft on_progress(%) wiederholt auf (0..100).
-        """
         total = None
         if input_file is not None:
             total = self.probe_duration_seconds(input_file)
-            # Falls ffprobe keine Dauer liefert, arbeiten wir ohne echte % und melden nur 0/100.
 
-        # ffmpeg loggt Fortschritt nach stderr
         proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -166,7 +212,7 @@ class FfmpegService:
             bufsize=1,
             universal_newlines=True,
             encoding="utf-8",
-            errors="replace"
+            errors="replace",
         )
 
         last_reported = -1
@@ -176,12 +222,10 @@ class FfmpegService:
 
             if proc.stderr:
                 for line in proc.stderr:
-                    # Beispiel: "... time=00:00:05.12 ..."
                     m = _TIME_RE.search(line)
                     if m and total and total > 0:
                         cur = _time_to_seconds(m.group(1), m.group(2), m.group(3))
                         pct = max(0, min(100, int(cur / total * 100)))
-                        # ffmpeg kann „über das Ende hinaus“ loggen; clamp + vermeide Spam
                         if pct != last_reported:
                             last_reported = pct
                             if on_progress:
@@ -189,21 +233,20 @@ class FfmpegService:
         finally:
             ret = proc.wait()
 
-        # Stelle sicher, dass 100% signalisiert wird
         if on_progress:
             on_progress(100)
 
         if ret != 0:
             raise subprocess.CalledProcessError(ret, cmd)
 
-    # --------- Export / Strip ---------
+    # -------------------- Export / Strip --------------------
 
     def export_subtitle(
         self,
         file: Path,
         rel_sub_index: int,
         out_dir: Path,
-        on_progress: Optional[Callable[[int], None]] = None
+        on_progress: Optional[Callable[[int], None]] = None,
     ) -> Path:
         ffmpeg = self.find_ffbin("ffmpeg")
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -214,7 +257,6 @@ class FfmpegService:
         try:
             self._run_ffmpeg_with_progress(cmd, input_file=file, on_progress=on_progress)
         except subprocess.CalledProcessError:
-            # Fallback: Bildbasierte Subs roh kopieren
             out = out.with_suffix(".sup")
             cmd = [ffmpeg, "-y", "-i", str(file), "-map", f"0:s:{rel_sub_index}", "-c", "copy", str(out)]
             self._run_ffmpeg_with_progress(cmd, input_file=file, on_progress=on_progress)
@@ -224,14 +266,14 @@ class FfmpegService:
         self,
         file: Path,
         keep_kinds: Optional[List[str]] = None,
-        on_progress: Optional[Callable[[int], None]] = None
+        on_progress: Optional[Callable[[int], None]] = None,
     ) -> Path:
         pr = self.probe_file(file)
 
-        # Ermitteln, welche Sub-Maps wir behalten
         keep_maps: List[str] = []
         if keep_kinds:
             from app.service.detection_service import DetectionService
+
             detect = DetectionService()
             sub_rel = -1
             for s in pr.streams:

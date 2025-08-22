@@ -23,6 +23,9 @@ _CFG_DIR = Path.home() / f".{APP.lower()}"
 _CFG_DIR.mkdir(parents=True, exist_ok=True)
 _CFG_FILE = _CFG_DIR / "config.json"
 
+_TRUE = {"1", "true", "yes", "on", "y", "t"}
+_FALSE = {"0", "false", "no", "off", "n", "f"}
+
 
 class _DictSettings:
     """
@@ -42,6 +45,19 @@ class _DictSettings:
         val = self._data.get(key, default)
         # einfache Typkonvertierung wie QSettings
         if type is bool:
+            # ACHTUNG: bool("false") wäre True -> daher unten settings_get_bool nutzen.
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, int):
+                return val != 0
+            if isinstance(val, str):
+                low = val.strip().lower()
+                if low in _TRUE:
+                    return True
+                if low in _FALSE:
+                    return False
+                # Fallback: unverändert lassen, damit Aufrufer entscheiden kann
+                return default if isinstance(default, bool) else False
             return bool(val)
         if type is int:
             try:
@@ -98,6 +114,35 @@ def app_data_dir() -> Path:
     return _CFG_DIR
 
 
+# ---------------------- Bool-Helper ----------------------
+
+def _parse_bool_like(v, default: bool = False) -> bool:
+    """Robuste Interpretation von bools aus QSettings (bool, int, str)."""
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, int):
+        return v != 0
+    if isinstance(v, str):
+        val = v.strip().lower()
+        if val in _TRUE:
+            return True
+        if val in _FALSE:
+            return False
+    return default
+
+
+def settings_get_bool(key: str, default: bool = False) -> bool:
+    s = get_settings()
+    raw = s.value(key, None)  # bewusst ohne type=bool, damit Strings sichtbar bleiben
+    return _parse_bool_like(raw, default)
+
+
+def settings_set_bool(key: str, value: bool) -> None:
+    get_settings().setValue(key, bool(value))
+
+
+# ---------------------- Notify-Style ----------------------
+
 def notify_style_default() -> str:
     """Return current notification style or default to "toast"."""
     s = get_settings()
@@ -145,15 +190,24 @@ def bundled_ffmpeg_available() -> bool:
 def use_bundled_preferred() -> bool:
     """
     True, wenn:
-      - Setting 'use_bundled' explizit True ist, ODER
-      - Setting noch NICHT gesetzt ist UND (Windows) UND Bundled-Binaries vorhanden sind.
+      - Setting 'prefer_bundled' (neuer Schlüssel) True ist, ODER
+      - Setting 'use_bundled' (Alt) True ist, ODER
+      - gar nichts gesetzt ist, aber (Windows) und Bundled-Binaries vorhanden sind.
     Sonst False.
+
+    Wichtig: Strings wie "false"/"0" werden korrekt interpretiert.
     """
     s = get_settings()
-    val = s.value("use_bundled", None)  # bewusst ohne type=bool -> None möglich
-    if isinstance(val, bool):
-        return val
-    # intelligenter Default, falls Nutzer nichts gesetzt hat:
+
+    # Neuer Schlüssel hat Vorrang
+    if (val := s.value("prefer_bundled", None)) is not None:
+        return _parse_bool_like(val, False)
+
+    # Abwärtskompatibel: alter Schlüssel
+    if (val := s.value("use_bundled", None)) is not None:
+        return _parse_bool_like(val, False)
+
+    # Intelligenter Default (wenn nichts konfiguriert ist)
     if platform.system() == "Windows" and bundled_ffmpeg_available():
         return True
     return False
@@ -168,7 +222,9 @@ def custom_bin_path(name: str) -> Optional[str]:
     v = v.strip()
     return v if v and Path(v).exists() else None
 
-# --- NEU: universelle Bytes-Helper (funktionieren mit QSettings und JSON-Fallback) ---
+
+# --- Universelle Bytes-Helper (funktionieren mit QSettings und JSON-Fallback) ---
+
 def settings_set_bytes(key: str, data: bytes) -> None:
     s = get_settings()
     try:
@@ -177,6 +233,7 @@ def settings_set_bytes(key: str, data: bytes) -> None:
     except Exception:
         # Fallback-Datei: als Base64-String speichern
         s.setValue(key, base64.b64encode(data).decode("ascii"))
+
 
 def settings_get_bytes(key: str) -> bytes | None:
     s = get_settings()
@@ -193,4 +250,3 @@ def settings_get_bytes(key: str) -> bytes | None:
         except Exception:
             return None
     return None
-

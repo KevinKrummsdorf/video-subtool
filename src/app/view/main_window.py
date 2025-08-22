@@ -2,18 +2,18 @@
 from __future__ import annotations
 import os
 import sys
-import platform
 import subprocess
 from pathlib import Path
 from typing import Optional, List, TypedDict
 
 from PySide6.QtCore import Qt, QTimer, Slot, Signal, QEvent, QByteArray
-from PySide6.QtGui import QAction, QFontMetrics, QGuiApplication
+from PySide6.QtGui import QAction, QFontMetrics
 from PySide6.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout,
-    QPushButton, QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox,
-    QSplitter, QStatusBar, QProgressDialog, QMenuBar, QHeaderView, QCheckBox,
-    QLineEdit, QMenu, QSizePolicy, QMessageBox
+    QApplication,
+    QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout, QPushButton,
+    QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QSplitter, QStatusBar,
+    QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit, QMenu, QSizePolicy,
+    QMessageBox,
 )
 
 from app.settings import get_settings, notify_style_default, settings_get_bytes, settings_set_bytes
@@ -21,13 +21,13 @@ from app.i18n import t
 from app import i18n
 from app.view.stream_table_model import StreamTableModel
 from app.view.settings_dialog import SettingsDialog
-from app.view.about_dialog import AboutDialog
 from app.controller.subtitle_controller import SubtitleController
 from app.controller.batch_controller import BatchController
 from app.service.notification_center import notification_center
 from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, ToastNotifier
 from app.view.toast_overlay import ToastOverlay
 from app.service.path_service import path_service
+from app.service.ffmpeg_service import FfmpegService
 
 
 class BatchStep(TypedDict, total=False):
@@ -92,6 +92,9 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_ui()
 
+        # Startprüfung (freundlich bei Custom; Hinweis bei System; blockend nur wenn gar nichts gefunden wird)
+        QTimer.singleShot(0, self._startup_check_ffmpeg)
+
         # --- UI-State wiederherstellen (Fenster + Splitter) ---
         try:
             g = settings_get_bytes("ui/main/geometry")
@@ -101,10 +104,10 @@ class MainWindow(QMainWindow):
             if s:
                 self.restoreState(QByteArray(s))
             sp = settings_get_bytes("ui/main/splitter")
-            if sp and hasattr(self, "splitter"):
+            if sp:
                 self.splitter.restoreState(QByteArray(sp))
         except Exception:
-            pass  # still starten
+            pass
 
     def _build_ui(self) -> None:
         # --- Topbar (Ordneranzeige) ---
@@ -118,7 +121,6 @@ class MainWindow(QMainWindow):
         self.folder_label.setMinimumHeight(line_h + 2)
         self.folder_label.setMaximumHeight(line_h + 2)
         self.folder_label.installEventFilter(self)
-        self._folder_label_text: str = ""
 
         # --- Videoliste ---
         self.video_list = VideoListWidget(self.sub_ctrl.collect_videos_from_paths)
@@ -136,6 +138,8 @@ class MainWindow(QMainWindow):
         self.stream_table.setModel(self.stream_model)
         self.stream_table.setSelectionBehavior(QTableView.SelectRows)
         self.stream_table.setSelectionMode(QTableView.SingleSelection)
+
+        # Tabelle: Look & Feel
         self.stream_table.verticalHeader().setVisible(False)
         self.stream_table.setAlternatingRowColors(True)
         self.stream_table.setWordWrap(False)
@@ -146,11 +150,7 @@ class MainWindow(QMainWindow):
         h.setSectionsMovable(True)
         h.setDefaultAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        # Kontextmenü für die Stream-Tabelle
-        self.stream_table.setContextMenuPolicy(Qt.CustomContextMenu)
-        self.stream_table.customContextMenuRequested.connect(self._on_stream_context_menu)
-
-        # --- Optionen ---
+        # --- Optionen-Bereich ---
         self.chk_export_selected = QCheckBox("Ausgewählten Sub exportieren")
         self.chk_export_selected.setChecked(True)
 
@@ -231,7 +231,9 @@ class MainWindow(QMainWindow):
         self.setStatusBar(QStatusBar())
 
         # Standardordner, i18n, erstes Laden
+        self._folder_label_text: str = ""   # vollständiger Text für Eliding
         self.default_dir = Path(sys.argv[0]).resolve().parent
+
         i18n.bus.language_changed.connect(self._retranslate)
         self._retranslate()
 
@@ -255,7 +257,6 @@ class MainWindow(QMainWindow):
 
     # --- Hilfsfunktionen ---
     def _get_current_folder_path(self) -> Path:
-        """Bevorzugt path_service, fällt sonst auf Label/Fallback zurück."""
         try:
             return path_service.get_output_folder()
         except Exception:
@@ -275,101 +276,6 @@ class MainWindow(QMainWindow):
         rel_idx = self.stream_model.rows[row][1]
         return int(rel_idx)
 
-    def _selected_row_info(self) -> Optional[dict]:
-        """Liefert Infos zur ausgewählten Stream-Zeile (oder None)."""
-        sel = self.stream_table.selectionModel()
-        if not sel or not sel.hasSelection():
-            return None
-        row = sel.selectedRows()[0].row()
-        # rows schema: (abs_idx, rel_idx, codec, lang, title, class, default)
-        try:
-            abs_idx, rel_idx, codec, lang, title, cls, default = self.stream_model.rows[row]
-        except Exception:
-            return None
-        return {
-            "abs_idx": abs_idx,
-            "rel_idx": rel_idx,
-            "codec": codec or "",
-            "lang": lang or "",
-            "title": title or "",
-            "class": cls or "",
-            "default": default or "",
-        }
-
-    def _copy_to_clipboard(self, text: str) -> None:
-        cb = QGuiApplication.clipboard()
-        cb.setText(text or "")
-
-    def _open_in_file_manager(self, file_path: Path) -> None:
-        try:
-            if platform.system() == "Windows":
-                # Explorer mit selektierter Datei, wenn möglich
-                if file_path.exists():
-                    subprocess.run(["explorer", "/select,", str(file_path)], check=False)
-                else:
-                    subprocess.run(["explorer", str(file_path.parent)], check=False)
-            else:
-                # Linux/macOS: Ordner öffnen
-                folder = file_path.parent if file_path.is_file() else file_path
-                if platform.system() == "Darwin":
-                    subprocess.run(["open", str(folder)], check=False)
-                else:
-                    subprocess.run(["xdg-open", str(folder)], check=False)
-        except Exception:
-            pass
-
-    # --- Kontextmenü: Stream-Tabelle ---
-    def _on_stream_context_menu(self, pos):
-        info = self._selected_row_info()
-        item = self.video_list.currentItem()
-        if info is None or item is None:
-            return
-        current_file = Path(item.data(Qt.UserRole))
-
-        menu = QMenu(self)
-
-        # Export this subtitle
-        act_export = menu.addAction(t("mw.export.selected"))
-        # Copy ffmpeg -map
-        act_map = menu.addAction("FFmpeg -map kopieren")
-        # Copy stream info
-        act_copy = menu.addAction("Stream-Infos kopieren")
-        menu.addSeparator()
-        # Open in file manager & copy path
-        act_open = menu.addAction("Im Explorer/Ordner öffnen")
-        act_copy_path = menu.addAction("Dateipfad kopieren")
-
-        chosen = menu.exec_(self.stream_table.viewport().mapToGlobal(pos))
-        if not chosen:
-            return
-
-        if chosen == act_export:
-            self._export_selected()
-            return
-
-        if chosen == act_map:
-            self._copy_to_clipboard(f"0:s:{info['rel_idx']}")
-            notification_center.success("Kopiert: -map 0:s:{idx}".format(idx=info["rel_idx"]))
-            return
-
-        if chosen == act_copy:
-            txt = (
-                f"rel={info['rel_idx']}  codec={info['codec']}  lang={info['lang']}\n"
-                f"title={info['title']}  class={info['class']}  default={info['default']}"
-            )
-            self._copy_to_clipboard(txt)
-            notification_center.success(t("sd.saved"))
-            return
-
-        if chosen == act_open:
-            self._open_in_file_manager(current_file)
-            return
-
-        if chosen == act_copy_path:
-            self._copy_to_clipboard(str(current_file))
-            notification_center.success("Pfad kopiert")
-            return
-
     # --- Menü-Aktionen ---
     def _export_selected(self):
         item = self.video_list.currentItem()
@@ -382,16 +288,14 @@ class MainWindow(QMainWindow):
             return
 
         file = Path(item.data(Qt.UserRole))
-        out_dir = path_service.get_output_folder()  # Export in aktuellen Arbeitsordner
+        out_dir = path_service.get_output_folder()
         try:
             out = self.sub_ctrl.export_stream(file, rel_idx, out_dir)
         except Exception as e:
             QMessageBox.critical(self, t("mw.export.failed"), str(e))
             return
 
-        msg = t("mw.exported", path=str(out))
-        (self.notify.success(msg) if hasattr(self, "notify")
-         else self.statusBar().showMessage(msg, 5000))
+        notification_center.success(t("mw.exported", path=str(out)))
 
     def _strip_and_replace(self):
         item = self.video_list.currentItem()
@@ -411,9 +315,7 @@ class MainWindow(QMainWindow):
             return
 
         self._on_video_selected(self.video_list.currentItem(), None)
-        msg = t("mw.replaced", name=out.name)
-        (self.notify.success(msg) if hasattr(self, "notify")
-         else self.statusBar().showMessage(msg, 5000))
+        notification_center.success(t("mw.replaced", name=out.name))
 
     def _batch_strip_folder(self):
         keep = self.keep_combo.currentData() or None
@@ -445,6 +347,7 @@ class MainWindow(QMainWindow):
         p = path_service.get_output_folder()
         norm = os.path.normpath(str(p)).strip()
         self._folder_label_text = f"{t('mw.current.folder')}: {norm}"
+
         fm = QFontMetrics(self.folder_label.font())
         elided = fm.elidedText(self._folder_label_text, Qt.ElideRight, max(50, self.folder_label.width() - 12))
         self.folder_label.setText(elided)
@@ -507,29 +410,35 @@ class MainWindow(QMainWindow):
 
     # ---------- Menü ----------
     def _build_menu(self):
-        from PySide6.QtGui import QKeySequence  # optional; Strings gehen auch
+        from PySide6.QtGui import QKeySequence
+
         menubar = QMenuBar(self)
         self.setMenuBar(menubar)
 
-        # Datei
+        # ---- Datei ----
         self.menu_file = menubar.addMenu("")
 
+        # Open (Ctrl+O)
         self.act_pick = QAction("", self)
         self.act_pick.setShortcut(QKeySequence("Ctrl+O"))
         self.act_pick.triggered.connect(self._pick_folder)
         self.menu_file.addAction(self.act_pick)
+
         self.menu_file.addSeparator()
 
+        # Export selected (Ctrl+E)
         self.act_export_selected = QAction(t("mw.export.selected"), self)
         self.act_export_selected.setShortcut("Ctrl+E")
         self.act_export_selected.triggered.connect(self._export_selected)
         self.menu_file.addAction(self.act_export_selected)
 
+        # Export all (Ctrl+Shift+E)
         self.act_batch_export = QAction(t("mw.batch.export"), self)
         self.act_batch_export.setShortcut("Ctrl+Shift+E")
         self.act_batch_export.triggered.connect(self._batch_export_folder)
         self.menu_file.addAction(self.act_batch_export)
 
+        # Remove/Replace (Ctrl+R)
         self.act_strip_replace = QAction(t("mw.strip.replace"), self)
         self.act_strip_replace.setShortcut("Ctrl+R")
         self.act_strip_replace.triggered.connect(self._strip_and_replace)
@@ -537,31 +446,35 @@ class MainWindow(QMainWindow):
 
         self.menu_file.addSeparator()
 
+        # Remove selected from list (Del)
         self.act_remove_selected = QAction("", self)
         self.act_remove_selected.setShortcut(Qt.Key_Delete)
         self.act_remove_selected.triggered.connect(self._remove_selected_files)
         self.menu_file.addAction(self.act_remove_selected)
 
+        # Clear list (Ctrl+Shift+Del)
         self.act_clear_list = QAction("", self)
         self.act_clear_list.setShortcut(QKeySequence("Ctrl+Shift+Del"))
         self.act_clear_list.triggered.connect(self._clear_video_list)
         self.menu_file.addAction(self.act_clear_list)
 
-        # Einstellungen
+        # ---- Edit ----
         self.menu_edit = menubar.addMenu("")
+
+        # Settings (F2)
         self.act_settings = QAction("", self)
         self.act_settings.setShortcut(Qt.Key_F2)
         self.act_settings.triggered.connect(self._open_settings)
         self.menu_edit.addAction(self.act_settings)
 
-        # Hilfe
+        # ---- Help (F1) ----
         self.menu_help = menubar.addMenu("")
         self.act_about = QAction("", self)
         self.act_about.setShortcut(Qt.Key_F1)
         self.act_about.triggered.connect(self._about)
         self.menu_help.addAction(self.act_about)
 
-        # Batch (Strg+B)
+        # ---- Batch (Ctrl+B) ----
         self.act_batch_strip = QAction(t("mw.batch.strip"), self)
         self.act_batch_strip.setShortcut("Ctrl+B")
         self.act_batch_strip.triggered.connect(self._batch_strip_folder)
@@ -570,11 +483,7 @@ class MainWindow(QMainWindow):
     def _retranslate(self, *_):
         # Titel & Pfadleiste
         self.setWindowTitle(t("app.title"))
-        cur = os.path.normpath(str(path_service.get_output_folder())) if path_service else ""
-        self._folder_label_text = f"{t('mw.current.folder')}: {cur}"
-        fm = QFontMetrics(self.folder_label.font())
-        elided = fm.elidedText(self._folder_label_text, Qt.ElideRight, max(50, self.folder_label.width() - 12))
-        self.folder_label.setText(elided)
+        self._update_current_folder_label()
 
         # Labels
         self.lbl_streams.setText(t("mw.streams.in.video"))
@@ -593,22 +502,25 @@ class MainWindow(QMainWindow):
         self.chk_apply_folder.setText(t("mw.opt.apply_to_folder"))
         self.btn_start.setText(t("mw.start"))
 
-        # Menüs / Actions
+        # Menüs
         self.menu_file.setTitle(t("menu.file"))
         self.menu_edit.setTitle(t("menu.settings"))
         self.menu_help.setTitle(t("menu.help"))
 
+        # Datei-Menü Actions
         self.act_pick.setText(t("common.folder.open"))
         self.act_export_selected.setText(t("mw.export.selected"))
         self.act_batch_export.setText(t("mw.batch.export"))
         self.act_strip_replace.setText(t("mw.strip.replace"))
         self.act_batch_strip.setText(t("mw.batch.strip"))
 
+        # Listen-Actions
         if hasattr(self, "act_remove_selected"):
             self.act_remove_selected.setText(t("mw.remove.selected"))
         if hasattr(self, "act_clear_list"):
             self.act_clear_list.setText(t("mw.clear.list"))
 
+        # Einstellungen/Hilfe
         self.act_settings.setText(t("common.settings"))
         self.act_about.setText(t("common.about"))
 
@@ -620,11 +532,18 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(t("sd.saved"), 4000)
 
     def _about(self):
-        AboutDialog(self).exec()
+        # Lazy import, damit Build nicht am __version__-Import scheitert
+        try:
+            from app.view.about_dialog import AboutDialog  # noqa: WPS433 (local import intentional)
+            AboutDialog(self).exec()
+        except Exception as e:
+            QMessageBox.critical(self, t("app.title"), f"About-Dialog konnte nicht geladen werden:\n{e}")
 
     # ---------- Ordner & Streams ----------
     def _pick_folder(self):
-        path = QFileDialog.getExistingDirectory(self, t("common.folder.choose"), str(self.default_dir))
+        path = QFileDialog.getExistingDirectory(
+            self, t("common.folder.choose"), str(self.default_dir)
+        )
         if not path:
             return
         self._load_folder(Path(path))
@@ -749,7 +668,9 @@ class MainWindow(QMainWindow):
             if self.chk_remove_all.isChecked():
                 self._batch_queue.append(BatchStep(mode="strip", keep=None, export_rel_idx=None))
             elif self.chk_strip_keep_rule.isChecked():
-                keep = self.keep_combo.currentData() or "forced"
+                keep = self.keep_combo.currentData()
+                if not keep:
+                    keep = "forced"
                 self._batch_queue.append(BatchStep(mode="strip", keep=keep, export_rel_idx=None))
 
             if not self._batch_queue:
@@ -847,8 +768,8 @@ class MainWindow(QMainWindow):
             notification_center.warn(t("mw.batch.done.partial", processed=str(processed), errors=str(errors)))
         self._start_next_batch_step()
 
+    # ---------- Persistenz ----------
     def closeEvent(self, event):
-        # Fenster- & Splitter-Layout persistieren
         try:
             settings_set_bytes("ui/main/geometry", bytes(self.saveGeometry()))
             settings_set_bytes("ui/main/state",    bytes(self.saveState()))
@@ -857,3 +778,117 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         super().closeEvent(event)
+
+    # ---------- FFmpeg/ffprobe-Startprüfung ----------
+    def _is_bundled_path(self, p: Path) -> bool:
+        """
+        Erkenne typische Pfade für gebündelte Binaries:
+          - Pfade unter sys._MEIPASS (PyInstaller onefile)
+          - unser Ressourcen-Ordner …/_internal/resources/ffmpeg/… (onedir)
+        """
+        try:
+            p = p.resolve()
+        except Exception:
+            return False
+
+        # PyInstaller onefile Temp-Verzeichnis
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass and str(p).startswith(str(Path(meipass).resolve())):
+            return True
+
+        # onedir: Ressourcen-Ordner
+        app_dir = Path(getattr(sys, "frozen", False) and sys.executable or sys.argv[0]).resolve().parent
+        candidate = app_dir / "_internal" / "resources" / "ffmpeg"
+        try:
+            return str(p).startswith(str(candidate.resolve()))
+        except Exception:
+            return False
+
+    def _is_valid_binary(self, path: Path) -> bool:
+        """Sanity-Check für Custom-Pfade: existiert und liefert `-version` erfolgreich?"""
+        try:
+            if not path.exists():
+                return False
+            proc = subprocess.run([str(path), "-version"],
+                                  stdout=subprocess.DEVNULL,
+                                  stderr=subprocess.DEVNULL,
+                                  timeout=5,
+                                  check=False)
+            return proc.returncode == 0
+        except Exception:
+            return False
+
+    def _startup_check_ffmpeg(self) -> None:
+        """
+        Start-Check:
+          - Wenn Custom-Pfade gesetzt sind: freundlich warnen, falls ungültig.
+          - Wenn gar nichts gefunden wird: blockierend Settings öffnen.
+          - KEIN System-Hinweis, wenn bundled benutzt wird oder der Nutzer "bundled bevorzugen" gewählt hat.
+        """
+        s = get_settings()
+        custom_ffmpeg  = (s.value("path_ffmpeg",  "",  type=str) or "").strip()
+        custom_ffprobe = (s.value("path_ffprobe", "",  type=str) or "").strip()
+        prefer_bundled = bool(s.value("prefer_bundled", False, bool))
+        has_custom     = bool(custom_ffmpeg or custom_ffprobe)
+
+        # 1) Custom prüfen → bei Fehler direkt Einstellungen öffnen
+        if has_custom:
+            bad = []
+            for name, p in (("ffmpeg", custom_ffmpeg), ("ffprobe", custom_ffprobe)):
+                if p and not self._is_valid_binary(Path(p)):
+                    bad.append(name)
+            if bad:
+                QMessageBox.warning(
+                    self,
+                    t("app.title"),
+                    "Die gesetzten FFmpeg-Pfade scheinen ungültig zu sein: "
+                    + ", ".join(bad) + ". Bitte in den Einstellungen prüfen."
+                )
+                self._open_settings()
+                return
+
+        ff = FfmpegService()
+
+        # 2) Prüfen, ob FFmpeg/ffprobe überhaupt gefunden werden
+        try:
+            ff_path = Path(ff.find_ffbin("ffmpeg"))
+            fp_path = Path(ff.find_ffbin("ffprobe"))
+            if not ff_path.exists() or not fp_path.exists():
+                raise FileNotFoundError
+        except Exception:
+            QMessageBox.critical(
+                self,
+                t("mw.ffmpeg.missing"),
+                "FFmpeg/ffprobe konnte nicht gefunden werden.\n\n"
+                "Bitte in den Einstellungen Pfade setzen oder die gebündelten Binaries verwenden."
+            )
+            self._open_settings()
+            return
+
+        # 3) Herkunft ermitteln (bundled/system/custom) und ggf. Hinweis unterdrücken
+        origin = None
+        if hasattr(ff, "detect_origin"):
+            try:
+                origin = ff.detect_origin()  # 'bundled' | 'system' | 'custom' | 'missing'
+            except Exception:
+                origin = None
+
+        # Fallback: am Pfad erkennen
+        if origin is None:
+            origin = "bundled" if (self._is_bundled_path(ff_path) and self._is_bundled_path(fp_path)) else \
+                     ("custom" if has_custom else "system")
+
+        # Kein Hinweis, wenn bundled genutzt wird oder Nutzer bundled bevorzugt
+        if origin == "bundled" or prefer_bundled:
+            return
+
+        # Kein Hinweis bei Custom
+        if origin == "custom":
+            return
+
+        # Freundlicher Hinweis nur bei System
+        msg = t("mw.ffmpeg.using.system")
+        if msg == "mw.ffmpeg.using.system":
+            msg = ("System-FFmpeg (PATH) wird verwendet. Für reproduzierbares Verhalten "
+                   "kannst du gebündelte Binaries bevorzugen oder Custom-Pfade setzen.")
+        notification_center.info(msg)
