@@ -6,7 +6,7 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QMessageBox
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QPixmap
 from PySide6.QtCore import QTimer, QPropertyAnimation, QEasingCurve
 
 from app.view.splash import SplashScreen
@@ -20,20 +20,40 @@ EXTRA_DELAY_MS  = 2000   # Zusatzwartezeit NACH Fade, bevor MainWindow kommt
 
 # -------- Pfade (PyInstaller vs. Dev) --------
 def base_dir() -> Path:
+    # _MEIPASS = PyInstaller-Tempdir, sonst Projektwurzel (video-subtool/)
     return Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parents[2]))
 
-
 RESOURCES_DIR = base_dir() / "resources"
+BRANDING_DIR  = RESOURCES_DIR / "branding"    # <— neu
+
+
+# -------- Hilfen für Branding --------
+def _first_existing(*candidates: Path) -> Path | None:
+    for p in candidates:
+        if p and p.exists():
+            return p
+    return None
+
+def _find_brand_asset(preferred_names: list[str], exts: tuple[str, ...] = (".png", ".ico", ".svg")) -> Path | None:
+    """
+    Sucht im branding/ nach der ersten existierenden Datei.
+    Beispiel: preferred_names=["app_icon", "icon"] prüft app_icon.png/.ico/.svg, dann icon.png/.ico/.svg.
+    """
+    for stem in preferred_names:
+        for ext in exts:
+            p = BRANDING_DIR / f"{stem}{ext}"
+            if p.exists():
+                return p
+    return None
 
 
 # -------- Icon laden --------
 def load_app_icon() -> QIcon:
-    ico = RESOURCES_DIR / "branding" / "icon.ico"
-    if ico.exists():
-        return QIcon(str(ico))
-    png = RESOURCES_DIR / "branding" / "icon.png"
-    if png.exists():
-        return QIcon(str(png))
+    # Priorität: app_icon.* > icon.*  (png/ico/svg)
+    icon_path = _find_brand_asset(["logo", "icon"], exts=(".ico", ".png", ".svg"))
+    if icon_path:
+        # QIcon kann png/ico/svg laden, svg braucht ggf. QtSvg — probieren wir einfach.
+        return QIcon(str(icon_path))
     return QIcon()
 
 
@@ -73,12 +93,19 @@ def main() -> int:
         app.setWindowIcon(icon)
 
     # --- Splash sofort anzeigen ---
-    brand_img = RESOURCES_DIR / "branding" / "kevnet-logo.png"
-    ico_file = RESOURCES_DIR / "branding" / "icon.ico"
-    png_file = RESOURCES_DIR / "branding" / "icon.png"
-    fallback_img = ico_file if ico_file.exists() else png_file
-    splash_source = brand_img if brand_img.exists() else fallback_img
-    splash = SplashScreen(image_path=splash_source, title=t("app.title"))
+    # Priorität für Splash: splash.* > logo_splash.* > logo.* > brand.* > kevnet-logo.* > icon.*
+    splash_path = (
+        _find_brand_asset(["splash", "logo_splash", "logo", "brand", "kevnet-logo"], exts=(".png", ".svg"))
+        or _find_brand_asset(["app_icon", "icon"], exts=(".png", ".ico", ".svg"))
+    )
+
+    if splash_path is None:
+        # Harte Fallbacks wie bisher
+        ico_file = BRANDING_DIR / "icon.ico"
+        png_file = BRANDING_DIR / "icon.png"
+        splash_path = _first_existing(ico_file, png_file)
+
+    splash = SplashScreen(image_path=splash_path, title=t("app.title"))
     splash.center_on_screen()
     splash.setWindowOpacity(1.0)
     splash.show()
