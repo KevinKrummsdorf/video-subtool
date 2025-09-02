@@ -122,7 +122,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
 
         # About-Dialog
         "about.title": "Über …",
-        "about.head": "VideoSubTool <span style='opacity:.7'>by</span> <b>kev-network</b>",
+        "about.head": "VideoSubTool <span style='opacity:.7'>by</span> <b>Kevin Krummsdorf</b>",
         "about.features": (
         "<ul style='margin-top:8px'>"
         "<li>Untertitel <b>analysieren</b> (ffprobe)</li>"
@@ -259,7 +259,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
 
         # About-Dialog
         "about.title": "About …",
-        "about.head": "VideoSubTool <span style='opacity:.7'>by</span> <b>kev-network</b>",
+        "about.head": "VideoSubTool <span style='opacity:.7'>by</span> <b>Kevin Krummsdorf</b>",
         "about.features": (
         "<ul style='margin-top:8px'>"
         "<li><b>Analyze</b> subtitles (ffprobe)</li>"
