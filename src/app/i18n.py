@@ -46,6 +46,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "menu.settings": "&Einstellungen",
         "menu.help": "&Hilfe",
 
+        # Tabs
+        "tab.export": "Export",
+        "tab.build": "Build",
+
         # Main Window – Labels
         "mw.no.folder": "Kein Ordner gewählt",
         "mw.current.folder": "Aktueller Ordner",
@@ -149,6 +153,25 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "about.website": "Website",
         "about.source": "Source &amp; Issues",
         "about.appdata": "App-Daten:",
+
+        # MKV Creator Dialog
+        "mkv.title": "MKV Creator",
+        "mkv.video_file": "Videodatei",
+        "mkv.audio_files": "Audiodateien",
+        "mkv.subtitle_files": "Untertiteldateien",
+        "mkv.add_audio": "Audio hinzufügen...",
+        "mkv.add_subtitle": "Untertitel hinzufügen...",
+        "mkv.remove_selected": "Ausgewählte entfernen",
+        "mkv.default_tracks": "Standardspuren",
+        "mkv.default_audio": "Standard-Audio:",
+        "mkv.default_subtitle": "Standard-Untertitel:",
+        "mkv.output_file": "Zieldatei",
+        "mkv.browse": "Durchsuchen...",
+        "mkv.create_mkv": "MKV erstellen",
+        "mkv.success": "MKV-Datei erfolgreich erstellt unter {path}",
+        "mkv.fail": "MKV-Datei konnte nicht erstellt werden: {error}",
+        "mkv.no_video_file": "Bitte wählen Sie eine Videodatei aus.",
+        "mkv.no_output_file": "Bitte geben Sie eine Zieldatei an.",
     },
     "en": {
         # App / Common
@@ -181,6 +204,10 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "menu.file": "&File",
         "menu.settings": "&Settings",
         "menu.help": "&Help",
+
+        # Tabs
+        "tab.export": "Export",
+        "tab.build": "Build",
 
         # Main Window – Labels
         "mw.no.folder": "No folder selected",
@@ -286,6 +313,25 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "about.website": "Website",
     "about.source": "Source &amp; Issues",
     "about.appdata": "App data:",
+
+    # MKV Creator Dialog
+    "mkv.title": "MKV Creator",
+    "mkv.video_file": "Video File",
+    "mkv.audio_files": "Audio Files",
+    "mkv.subtitle_files": "Subtitle Files",
+    "mkv.add_audio": "Add Audio...",
+    "mkv.add_subtitle": "Add Subtitles...",
+    "mkv.remove_selected": "Remove Selected",
+    "mkv.default_tracks": "Default Tracks",
+    "mkv.default_audio": "Default Audio:",
+    "mkv.default_subtitle": "Default Subtitle:",
+    "mkv.output_file": "Output File",
+    "mkv.browse": "Browse...",
+    "mkv.create_mkv": "Create MKV",
+    "mkv.success": "MKV file created successfully at {path}",
+    "mkv.fail": "Failed to create MKV file: {error}",
+    "mkv.no_video_file": "Please select a video file.",
+    "mkv.no_output_file": "Please specify an output file.",
     }
 }
 

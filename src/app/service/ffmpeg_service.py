@@ -309,3 +309,51 @@ class FfmpegService:
             backup.replace(file)
             raise
         return file
+
+    def create_mkv(
+        self,
+        video_file: Path,
+        audio_files: List[Path],
+        subtitle_files: List[Path],
+        output_file: Path,
+        default_audio_index: Optional[int] = None,
+        default_subtitle_index: Optional[int] = None,
+        on_progress: Optional[Callable[[int], None]] = None,
+    ) -> Path:
+        """
+        Creates a new MKV file by muxing a video file with additional audio and subtitle files.
+        All streams from the original video file are kept.
+        Default flags can be set on one audio and one subtitle stream.
+        """
+        ffmpeg = self.find_ffbin("ffmpeg")
+
+        pr = self.probe_file(video_file)
+        num_audio_in_video = sum(1 for s in pr.streams if s.codec_type == "audio")
+        num_subs_in_video = sum(1 for s in pr.streams if s.codec_type == "subtitle")
+
+        all_inputs = [video_file] + audio_files + subtitle_files
+
+        cmd = [ffmpeg, "-y"]
+        for f in all_inputs:
+            cmd += ["-i", str(f)]
+
+        for i in range(len(all_inputs)):
+            cmd += ["-map", f"{i}"]
+
+        cmd += ["-c", "copy"]
+
+        total_audio_streams = num_audio_in_video + len(audio_files)
+        total_subtitle_streams = num_subs_in_video + len(subtitle_files)
+
+        for i in range(total_audio_streams):
+            is_default = (i == default_audio_index)
+            cmd += [f"-disposition:a:{i}", "default" if is_default else "0"]
+        
+        for i in range(total_subtitle_streams):
+            is_default = (i == default_subtitle_index)
+            cmd += [f"-disposition:s:{i}", "default" if is_default else "0"]
+
+        cmd += [str(output_file)]
+
+        self._run_ffmpeg_with_progress(cmd, input_file=video_file, on_progress=on_progress)
+        return output_file
