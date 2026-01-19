@@ -345,16 +345,12 @@ class FfmpegService:
         total_audio_streams = num_audio_in_video + len(audio_files)
         total_subtitle_streams = num_subs_in_video + len(subtitle_files)
 
-        # Correctly calculate the final index for the default track
-        final_default_audio_idx = (num_audio_in_video + default_audio_index) if default_audio_index is not None else -1
-        final_default_sub_idx = (num_subs_in_video + default_subtitle_index) if default_subtitle_index is not None else -1
-
         for i in range(total_audio_streams):
-            is_default = (i == final_default_audio_idx)
+            is_default = (i == default_audio_index)
             cmd += [f"-disposition:a:{i}", "default" if is_default else "0"]
         
         for i in range(total_subtitle_streams):
-            is_default = (i == final_default_sub_idx)
+            is_default = (i == default_subtitle_index)
             cmd += [f"-disposition:s:{i}", "default" if is_default else "0"]
 
         cmd += [str(output_file)]

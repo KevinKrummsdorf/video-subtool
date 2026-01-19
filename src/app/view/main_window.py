@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QFileDialog, QVBoxLayout, QHBoxLayout, QPushButton,
     QTableView, QListWidget, QListWidgetItem, QLabel, QComboBox, QSplitter, QStatusBar,
     QProgressDialog, QMenuBar, QHeaderView, QCheckBox, QLineEdit, QMenu, QSizePolicy,
-    QMessageBox,
+    QMessageBox, QTabWidget, QGroupBox
 )
 
 from app.settings import get_settings, notify_style_default, settings_get_bytes, settings_set_bytes
@@ -28,7 +28,6 @@ from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, Toa
 from app.view.toast_overlay import ToastOverlay
 from app.service.path_service import path_service
 from app.service.ffmpeg_service import FfmpegService
-from app.controller.mkv_controller import MKVController
 
 
 class BatchStep(TypedDict, total=False):
@@ -178,9 +177,6 @@ class MainWindow(QMainWindow):
         self.btn_start = QPushButton("Start")
         self.btn_start.clicked.connect(self._on_start_clicked)
 
-        self.btn_create_mkv = QPushButton("Create MKV")
-        self.btn_create_mkv.clicked.connect(self._on_create_mkv_clicked)
-
         # --- kompakter Header-Container ---
         topbar_w = QWidget()
         topbar = QHBoxLayout(topbar_w)
@@ -198,27 +194,103 @@ class MainWindow(QMainWindow):
         export_row.addWidget(self.edit_export_dir, 1)
         export_row.addWidget(self.btn_browse_export)
 
-        rightbar = QVBoxLayout()
-        rightbar.addWidget(self.lbl_streams)
-        rightbar.addWidget(self.stream_table)
-        rightbar.addWidget(self.chk_export_selected)
-        rightbar.addWidget(self.chk_strip_keep_rule)
-        rightbar.addWidget(self.keep_combo)
-        rightbar.addWidget(self.chk_remove_all)
-        rightbar.addLayout(export_row)
-        rightbar.addSpacing(8)
-        rightbar.addWidget(self.chk_apply_folder)
-        rightbar.addWidget(self.btn_start)
-        rightbar.addWidget(self.btn_create_mkv)
-        rightbar.addStretch(1)
+        # Tab "Export"
+        export_tab = QWidget()
+        export_layout = QVBoxLayout(export_tab)
+        export_layout.addWidget(self.lbl_streams)
+        export_layout.addWidget(self.stream_table)
+        export_layout.addWidget(self.chk_export_selected)
+        export_layout.addWidget(self.chk_strip_keep_rule)
+        export_layout.addWidget(self.keep_combo)
+        export_layout.addWidget(self.chk_remove_all)
+        export_layout.addLayout(export_row)
+        export_layout.addSpacing(8)
+        export_layout.addWidget(self.chk_apply_folder)
+        export_layout.addWidget(self.btn_start)
+        export_layout.addStretch(1)
+
+        self.tabs = QTabWidget()
+        self.tabs.addTab(export_tab, t("tab.export"))
+
+        # Tab "Build"
+        build_tab = QWidget()
+        build_layout = QVBoxLayout(build_tab)
+        
+        # Video File Selection
+        self.video_group = QGroupBox()
+        video_layout = QHBoxLayout()
+        self.video_file_edit = QLineEdit()
+        self.browse_video_button = QPushButton()
+        video_layout.addWidget(self.video_file_edit)
+        video_layout.addWidget(self.browse_video_button)
+        self.video_group.setLayout(video_layout)
+        build_layout.addWidget(self.video_group)
+
+        # Audio Files Selection
+        self.audio_group = QGroupBox()
+        audio_layout = QVBoxLayout()
+        self.audio_list_widget = QListWidget()
+        audio_buttons_layout = QHBoxLayout()
+        self.add_audio_button = QPushButton()
+        self.remove_audio_button = QPushButton()
+        audio_buttons_layout.addWidget(self.add_audio_button)
+        audio_buttons_layout.addWidget(self.remove_audio_button)
+        audio_layout.addWidget(self.audio_list_widget)
+        audio_layout.addLayout(audio_buttons_layout)
+        self.audio_group.setLayout(audio_layout)
+        build_layout.addWidget(self.audio_group)
+
+        # Subtitle Files Selection
+        self.subtitle_group = QGroupBox()
+        subtitle_layout = QVBoxLayout()
+        self.subtitle_list_widget = QListWidget()
+        subtitle_buttons_layout = QHBoxLayout()
+        self.add_subtitle_button = QPushButton()
+        self.remove_subtitle_button = QPushButton()
+        subtitle_buttons_layout.addWidget(self.add_subtitle_button)
+        subtitle_buttons_layout.addWidget(self.remove_subtitle_button)
+        subtitle_layout.addWidget(self.subtitle_list_widget)
+        subtitle_layout.addLayout(subtitle_buttons_layout)
+        self.subtitle_group.setLayout(subtitle_layout)
+        build_layout.addWidget(self.subtitle_group)
+        
+        # Default Track Selection
+        self.default_track_group = QGroupBox()
+        default_track_layout = QHBoxLayout()
+        self.default_audio_combo = QComboBox()
+        self.default_subtitle_combo = QComboBox()
+        self.default_audio_label = QLabel()
+        self.default_subtitle_label = QLabel()
+        default_track_layout.addWidget(self.default_audio_label)
+        default_track_layout.addWidget(self.default_audio_combo)
+        default_track_layout.addWidget(self.default_subtitle_label)
+        default_track_layout.addWidget(self.default_subtitle_combo)
+        self.default_track_group.setLayout(default_track_layout)
+        build_layout.addWidget(self.default_track_group)
+
+        # Output File Selection
+        self.output_group = QGroupBox()
+        output_layout = QHBoxLayout()
+        self.output_file_edit = QLineEdit()
+        self.browse_output_button = QPushButton()
+        output_layout.addWidget(self.output_file_edit)
+        output_layout.addWidget(self.browse_output_button)
+        self.output_group.setLayout(output_layout)
+        build_layout.addWidget(self.output_group)
+
+        # Create Button
+        self.btn_create_mkv = QPushButton()
+        build_layout.addWidget(self.btn_create_mkv)
+        build_layout.addStretch(1)
+        
+        self.tabs.addTab(build_tab, t("tab.build"))
 
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(self.lbl_videos)
         left_layout.addWidget(self.video_list)
 
-        right = QWidget()
-        right.setLayout(rightbar)
+        right = self.tabs
 
         self.splitter = QSplitter()
         self.splitter.addWidget(left)
@@ -256,9 +328,23 @@ class MainWindow(QMainWindow):
         self.chk_strip_keep_rule.toggled.connect(self._update_keep_combo_enabled)
         self.chk_remove_all.toggled.connect(self._update_keep_combo_enabled)
 
+        # Build tab signals
+        self.browse_video_button.clicked.connect(self._browse_video)
+        self.add_audio_button.clicked.connect(self._add_audio)
+        self.remove_audio_button.clicked.connect(self._remove_audio)
+        self.add_subtitle_button.clicked.connect(self._add_subtitle)
+        self.remove_subtitle_button.clicked.connect(self._remove_subtitle)
+        self.browse_output_button.clicked.connect(self._browse_output)
+        self.btn_create_mkv.clicked.connect(self._create_mkv)
+
         # Laufzeit
         self._progress: QProgressDialog | None = None
         self._batch_queue: list[BatchStep] = []
+        self._video_file = None
+        self._audio_files = []
+        self._subtitle_files = []
+        self._existing_audio_streams = []
+        self._existing_subtitle_streams = []
 
     # --- Hilfsfunktionen ---
     def _get_current_folder_path(self) -> Path:
@@ -506,7 +592,26 @@ class MainWindow(QMainWindow):
         self.btn_browse_export.setText(t("sd.pick.file"))
         self.chk_apply_folder.setText(t("mw.opt.apply_to_folder"))
         self.btn_start.setText(t("mw.start"))
-        self.btn_create_mkv.setText(t("mw.create_mkv"))
+
+        # Build Tab
+        self.video_group.setTitle(t("mkv.video_file"))
+        self.browse_video_button.setText(t("mkv.browse"))
+        self.audio_group.setTitle(t("mkv.audio_files"))
+        self.add_audio_button.setText(t("mkv.add_audio"))
+        self.remove_audio_button.setText(t("mkv.remove_selected"))
+        self.subtitle_group.setTitle(t("mkv.subtitle_files"))
+        self.add_subtitle_button.setText(t("mkv.add_subtitle"))
+        self.remove_subtitle_button.setText(t("mkv.remove_selected"))
+        self.default_track_group.setTitle(t("mkv.default_tracks"))
+        self.default_audio_label.setText(t("mkv.default_audio"))
+        self.default_subtitle_label.setText(t("mkv.default_subtitle"))
+        self.output_group.setTitle(t("mkv.output_file"))
+        self.browse_output_button.setText(t("mkv.browse"))
+        self.btn_create_mkv.setText(t("mkv.create_mkv"))
+
+        # Tabs
+        self.tabs.setTabText(0, t("tab.export"))
+        self.tabs.setTabText(1, t("tab.build"))
 
         # Menüs
         self.menu_file.setTitle(t("menu.file"))
@@ -728,9 +833,106 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, t("mw.remove.fail.title"), f"{t('mw.remove.fail.msg')}\n\n{e}")
                 return
 
-    def _on_create_mkv_clicked(self):
-        mkv_controller = MKVController(self)
-        mkv_controller.show()
+    # ---------- Build Tab methods ----------
+    def _create_mkv(self):
+        if not self._video_file:
+            QMessageBox.warning(self, t("mkv.title"), t("mkv.no_video_file"))
+            return
+
+        output_path = self.output_file_edit.text()
+        if not output_path:
+            QMessageBox.warning(self, t("mkv.title"), t("mkv.no_output_file"))
+            return
+        output_file = Path(output_path)
+
+        default_audio_index = self.default_audio_combo.currentData()
+        default_subtitle_index = self.default_subtitle_combo.currentData()
+
+        progress_dialog = QProgressDialog(t("mkv.create_mkv"), t("common.cancel"), 0, 100, self)
+        progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.setAutoClose(True)
+        progress_dialog.show()
+
+        def on_progress(value):
+            progress_dialog.setValue(value)
+
+        try:
+            ffmpeg_service = FfmpegService()
+            ffmpeg_service.create_mkv(
+                video_file=self._video_file,
+                audio_files=self._audio_files,
+                subtitle_files=self._subtitle_files,
+                output_file=output_file,
+                default_audio_index=default_audio_index if default_audio_index != -1 else None,
+                default_subtitle_index=default_subtitle_index if default_subtitle_index != -1 else None,
+                on_progress=on_progress,
+            )
+            progress_dialog.setValue(100)
+            QMessageBox.information(self, t("mkv.title"), t("mkv.success", path=str(output_file)))
+        except Exception as e:
+            progress_dialog.close()
+            QMessageBox.critical(self, t("mkv.title"), t("mkv.fail", error=str(e)))
+
+    def _browse_video(self):
+        file, _ = QFileDialog.getOpenFileName(self, t("mkv.video_file"), "", "Video Files (*.mkv *.mp4 *.avi)")
+        if file:
+            self._video_file = Path(file)
+            self.video_file_edit.setText(file)
+            
+            ffmpeg_service = FfmpegService()
+            probe_result = ffmpeg_service.probe_file(self._video_file)
+            self._existing_audio_streams = [s for s in probe_result.streams if s.codec_type == "audio"]
+            self._existing_subtitle_streams = [s for s in probe_result.streams if s.codec_type == "subtitle"]
+            
+            self._update_default_audio_combo()
+            self._update_default_subtitle_combo()
+
+    def _add_audio(self):
+        files, _ = QFileDialog.getOpenFileNames(self, t("mkv.audio_files"), "", "Audio Files (*.m4a *.aac *.ac3 *.dts *.mp3)")
+        for file in files:
+            self._audio_files.append(Path(file))
+            self.audio_list_widget.addItem(file)
+        self._update_default_audio_combo()
+
+    def _remove_audio(self):
+        for item in self.audio_list_widget.selectedItems():
+            self._audio_files.remove(Path(item.text()))
+            self.audio_list_widget.takeItem(self.audio_list_widget.row(item))
+        self._update_default_audio_combo()
+
+    def _add_subtitle(self):
+        files, _ = QFileDialog.getOpenFileNames(self, t("mkv.subtitle_files"), "", "Subtitle Files (*.srt *.ass *.sup)")
+        for file in files:
+            self._subtitle_files.append(Path(file))
+            self.subtitle_list_widget.addItem(file)
+        self._update_default_subtitle_combo()
+
+    def _remove_subtitle(self):
+        for item in self.subtitle_list_widget.selectedItems():
+            self._subtitle_files.remove(Path(item.text()))
+            self.subtitle_list_widget.takeItem(self.subtitle_list_widget.row(item))
+        self._update_default_subtitle_combo()
+
+    def _browse_output(self):
+        file, _ = QFileDialog.getSaveFileName(self, t("mkv.output_file"), "", "MKV Files (*.mkv)")
+        if file:
+            self.output_file_edit.setText(file)
+
+    def _update_default_audio_combo(self):
+        self.default_audio_combo.clear()
+        self.default_audio_combo.addItem("None", -1)
+        for i, stream in enumerate(self._existing_audio_streams):
+            self.default_audio_combo.addItem(f"Stream {stream.index}: {stream.language} ({stream.codec_name})", i)
+        for i, file in enumerate(self._audio_files):
+            self.default_audio_combo.addItem(file.name, len(self._existing_audio_streams) + i)
+
+    def _update_default_subtitle_combo(self):
+        self.default_subtitle_combo.clear()
+        self.default_subtitle_combo.addItem("None", -1)
+        for i, stream in enumerate(self._existing_subtitle_streams):
+            self.default_subtitle_combo.addItem(f"Stream {stream.index}: {stream.language} ({stream.codec_name})", i)
+        for i, file in enumerate(self._subtitle_files):
+            self.default_subtitle_combo.addItem(file.name, len(self._existing_subtitle_streams) + i)
 
     # ---------- Batch-Kette ----------
     def _collect_current_folder_files(self) -> List[Path]:
