@@ -19,6 +19,19 @@ VideoSubTool is a **PySide6** GUI on top of FFmpeg/ffprobe for managing subtitle
 - [Poetry](https://python-poetry.org/) installed and on PATH
 - Windows: PowerShell 5+ or PowerShell 7+
 
+### Poetry Installation
+For Python 3.12+, it is recommended to install Poetry using the official installer:
+
+**Linux/macOS**
+```bash
+curl -sSL https://install.python-poetry.org | python3 -
+```
+
+**Windows (PowerShell)**
+```powershell
+(Invoke-WebRequest -Uri https://install.python-poetry.org -UseBasicParsing).Content | py -
+```
+
 ### Install (development)
 ```bash
 git clone https://github.com/KevinKrummsdorf/video-subtool.git

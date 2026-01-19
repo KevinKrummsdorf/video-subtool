@@ -65,6 +65,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mw.opt.custom_export_dir": "Eigenen Zielordner verwenden",
         "mw.opt.apply_to_folder": "Auf gesamten Ordner anwenden (Batch)",
         "mw.start": "Start",
+        "mw.create_mkv": "MKV erstellen",
 
         # Meldungen / Fehler
         "mw.ffmpeg.missing": "FFmpeg/ffprobe fehlt",
@@ -220,6 +221,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mw.opt.custom_export_dir": "Use custom target folder",
         "mw.opt.apply_to_folder": "Apply to entire folder (batch)",
         "mw.start": "Start",
+        "mw.create_mkv": "Create MKV",
 
         # Messages / Errors
         "mw.ffmpeg.missing": "FFmpeg/ffprobe missing",
