@@ -28,6 +28,7 @@ from app.view.notifiers import INotifier, StatusBarNotifier, DialogNotifier, Toa
 from app.view.toast_overlay import ToastOverlay
 from app.service.path_service import path_service
 from app.service.ffmpeg_service import FfmpegService
+from app.controller.mkv_controller import MKVController
 
 
 class BatchStep(TypedDict, total=False):
@@ -177,6 +178,9 @@ class MainWindow(QMainWindow):
         self.btn_start = QPushButton("Start")
         self.btn_start.clicked.connect(self._on_start_clicked)
 
+        self.btn_create_mkv = QPushButton("Create MKV")
+        self.btn_create_mkv.clicked.connect(self._on_create_mkv_clicked)
+
         # --- kompakter Header-Container ---
         topbar_w = QWidget()
         topbar = QHBoxLayout(topbar_w)
@@ -205,6 +209,7 @@ class MainWindow(QMainWindow):
         rightbar.addSpacing(8)
         rightbar.addWidget(self.chk_apply_folder)
         rightbar.addWidget(self.btn_start)
+        rightbar.addWidget(self.btn_create_mkv)
         rightbar.addStretch(1)
 
         left = QWidget()
@@ -501,6 +506,7 @@ class MainWindow(QMainWindow):
         self.btn_browse_export.setText(t("sd.pick.file"))
         self.chk_apply_folder.setText(t("mw.opt.apply_to_folder"))
         self.btn_start.setText(t("mw.start"))
+        self.btn_create_mkv.setText(t("mw.create_mkv"))
 
         # Menüs
         self.menu_file.setTitle(t("menu.file"))
@@ -721,6 +727,10 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, t("mw.remove.fail.title"), f"{t('mw.remove.fail.msg')}\n\n{e}")
                 return
+
+    def _on_create_mkv_clicked(self):
+        mkv_controller = MKVController(self)
+        mkv_controller.show()
 
     # ---------- Batch-Kette ----------
     def _collect_current_folder_files(self) -> List[Path]:
