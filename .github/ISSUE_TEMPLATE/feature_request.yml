@@ -1,0 +1,16 @@
+name: Feature Request
+description: Suggest a new feature for GhostCleaner
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Feature description
+      description: What feature do you want?
+    validations:
+      required: true
+  - type: textarea
+    id: rationale
+    attributes:
+      label: Why is this useful?
