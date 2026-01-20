@@ -184,6 +184,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "convert.fail": "Konvertierung fehlgeschlagen: {error}",
         "convert.to": "Nach:",
         "convert.select_file": "Untertiteldatei auswählen",
+        "convert.video_file": "Videodatei (für SUB/IDX)",
     },
     "en": {
         # App / Common
@@ -356,6 +357,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "convert.fail": "Conversion failed: {error}",
     "convert.to": "To:",
     "convert.select_file": "Select Subtitle File",
+    "convert.video_file": "Video File (for SUB/IDX)",
     }
 }
 
