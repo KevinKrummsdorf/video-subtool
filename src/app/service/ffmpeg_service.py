@@ -357,3 +357,9 @@ class FfmpegService:
 
         self._run_ffmpeg_with_progress(cmd, input_file=video_file, on_progress=on_progress)
         return output_file
+
+    def convert_subtitle(self, input_file: Path, output_file: Path, on_progress: Optional[Callable[[int], None]] = None) -> Path:
+        ffmpeg = self.find_ffbin("ffmpeg")
+        cmd = [ffmpeg, "-y", "-i", str(input_file), str(output_file)]
+        self._run_ffmpeg_with_progress(cmd, input_file=input_file, on_progress=on_progress)
+        return output_file

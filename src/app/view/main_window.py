@@ -285,6 +285,34 @@ class MainWindow(QMainWindow):
         
         self.tabs.addTab(build_tab, t("tab.build"))
 
+        # Tab "Convert"
+        convert_tab = QWidget()
+        convert_layout = QVBoxLayout(convert_tab)
+
+        self.convert_group = QGroupBox()
+        convert_group_layout = QHBoxLayout()
+        self.convert_file_edit = QLineEdit()
+        self.browse_convert_file_button = QPushButton()
+        convert_group_layout.addWidget(self.convert_file_edit)
+        convert_group_layout.addWidget(self.browse_convert_file_button)
+        self.convert_group.setLayout(convert_group_layout)
+        convert_layout.addWidget(self.convert_group)
+
+        self.format_group = QGroupBox()
+        format_layout = QHBoxLayout()
+        self.to_format_combo = QComboBox()
+        self.to_label = QLabel()
+        format_layout.addWidget(self.to_label)
+        format_layout.addWidget(self.to_format_combo)
+        self.format_group.setLayout(format_layout)
+        convert_layout.addWidget(self.format_group)
+        
+        self.btn_convert = QPushButton()
+        convert_layout.addWidget(self.btn_convert)
+        convert_layout.addStretch(1)
+
+        self.tabs.addTab(convert_tab, t("tab.convert"))
+
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(self.lbl_videos)
@@ -336,6 +364,11 @@ class MainWindow(QMainWindow):
         self.remove_subtitle_button.clicked.connect(self._remove_subtitle)
         self.browse_output_button.clicked.connect(self._browse_output)
         self.btn_create_mkv.clicked.connect(self._create_mkv)
+
+        # Convert tab
+        self.to_format_combo.addItems(["SRT", "ASS/SSA", "SUB/IDX"])
+        self.browse_convert_file_button.clicked.connect(self._browse_convert_file)
+        self.btn_convert.clicked.connect(self._convert_subtitle)
 
         # Laufzeit
         self._progress: QProgressDialog | None = None
@@ -612,6 +645,14 @@ class MainWindow(QMainWindow):
         # Tabs
         self.tabs.setTabText(0, t("tab.export"))
         self.tabs.setTabText(1, t("tab.build"))
+        self.tabs.setTabText(2, t("tab.convert"))
+
+        # Convert Tab
+        self.convert_group.setTitle(t("convert.input_file"))
+        self.browse_convert_file_button.setText(t("mkv.browse"))
+        self.format_group.setTitle(t("convert.formats"))
+        self.to_label.setText(t("convert.to"))
+        self.btn_convert.setText(t("convert.convert"))
 
         # Menüs
         self.menu_file.setTitle(t("menu.file"))
@@ -933,6 +974,29 @@ class MainWindow(QMainWindow):
             self.default_subtitle_combo.addItem(f"Stream {stream.index}: {stream.language} ({stream.codec_name})", i)
         for i, file in enumerate(self._subtitle_files):
             self.default_subtitle_combo.addItem(file.name, len(self._existing_subtitle_streams) + i)
+
+    def _browse_convert_file(self):
+        file, _ = QFileDialog.getOpenFileName(self, t("convert.select_file"), "", "Subtitle Files (*.srt *.ass *.ssa *.sub *.idx)")
+        if file:
+            self.convert_file_edit.setText(file)
+
+    def _convert_subtitle(self):
+        input_file = self.convert_file_edit.text()
+        if not input_file:
+            QMessageBox.warning(self, t("app.title"), t("convert.no_input_file"))
+            return
+
+        to_format = self.to_format_combo.currentText()
+
+        output_file, _ = QFileDialog.getSaveFileName(self, t("convert.output_file"), "", f"{to_format} Files (*.{to_format.lower().split('/')[0]})")
+        if not output_file:
+            return
+
+        try:
+            self.sub_ctrl.convert_subtitle(Path(input_file), Path(output_file))
+            notification_center.success(t("convert.success", path=output_file))
+        except Exception as e:
+            QMessageBox.critical(self, t("app.title"), t("convert.fail", error=str(e)))
 
     # ---------- Batch-Kette ----------
     def _collect_current_folder_files(self) -> List[Path]:

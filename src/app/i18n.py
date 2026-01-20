@@ -49,6 +49,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         # Tabs
         "tab.export": "Export",
         "tab.build": "Build",
+        "tab.convert": "Konvertieren",
 
         # Main Window – Labels
         "mw.no.folder": "Kein Ordner gewählt",
@@ -172,6 +173,17 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mkv.fail": "MKV-Datei konnte nicht erstellt werden: {error}",
         "mkv.no_video_file": "Bitte wählen Sie eine Videodatei aus.",
         "mkv.no_output_file": "Bitte geben Sie eine Zieldatei an.",
+
+        # Convert Tab
+        "convert.input_file": "Eingabedatei",
+        "convert.formats": "Formate",
+        "convert.convert": "Konvertieren",
+        "convert.no_input_file": "Bitte wählen Sie eine Eingabedatei.",
+        "convert.output_file": "Ausgabedatei",
+        "convert.success": "Untertitel erfolgreich konvertiert nach {path}",
+        "convert.fail": "Konvertierung fehlgeschlagen: {error}",
+        "convert.to": "Nach:",
+        "convert.select_file": "Untertiteldatei auswählen",
     },
     "en": {
         # App / Common
@@ -208,6 +220,7 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         # Tabs
         "tab.export": "Export",
         "tab.build": "Build",
+        "tab.convert": "Convert",
 
         # Main Window – Labels
         "mw.no.folder": "No folder selected",
@@ -332,6 +345,17 @@ _STRINGS: Dict[str, Dict[str, str]] = {
     "mkv.fail": "Failed to create MKV file: {error}",
     "mkv.no_video_file": "Please select a video file.",
     "mkv.no_output_file": "Please specify an output file.",
+    
+    # Convert Tab
+    "convert.input_file": "Input File",
+    "convert.formats": "Formats",
+    "convert.convert": "Convert",
+    "convert.no_input_file": "Please select an input file.",
+    "convert.output_file": "Output File",
+    "convert.success": "Subtitle successfully converted to {path}",
+    "convert.fail": "Conversion failed: {error}",
+    "convert.to": "To:",
+    "convert.select_file": "Select Subtitle File",
     }
 }
 
