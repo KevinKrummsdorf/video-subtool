@@ -73,6 +73,40 @@ class VideoListWidget(QListWidget):
             e.ignore()
 
 
+class SubtitleLineEdit(QLineEdit):
+    """QLineEdit that accepts subtitle file drops."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def _is_subtitle_file(self, path: Path) -> bool:
+        return path.suffix.lower() in ['.srt', '.ass', '.ssa', '.sub', '.idx']
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            urls = e.mimeData().urls()
+            if len(urls) == 1:
+                path = Path(urls[0].toLocalFile())
+                if path.is_file() and self._is_subtitle_file(path):
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dragMoveEvent(self, e):
+        self.dragEnterEvent(e)
+
+    def dropEvent(self, e):
+        if e.mimeData().hasUrls():
+            urls = e.mimeData().urls()
+            if len(urls) == 1:
+                path = Path(urls[0].toLocalFile())
+                if path.is_file() and self._is_subtitle_file(path):
+                    self.setText(str(path))
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+
 class MainWindow(QMainWindow):
     """Hauptfenster (nur View + Wiring zu Controllern)."""
 
@@ -291,7 +325,7 @@ class MainWindow(QMainWindow):
 
         self.convert_group = QGroupBox()
         convert_group_layout = QHBoxLayout()
-        self.convert_file_edit = QLineEdit()
+        self.convert_file_edit = SubtitleLineEdit()
         self.browse_convert_file_button = QPushButton()
         convert_group_layout.addWidget(self.convert_file_edit)
         convert_group_layout.addWidget(self.browse_convert_file_button)
@@ -369,6 +403,7 @@ class MainWindow(QMainWindow):
         self.to_format_combo.addItems(["SRT", "ASS/SSA", "SUB/IDX"])
         self.browse_convert_file_button.clicked.connect(self._browse_convert_file)
         self.btn_convert.clicked.connect(self._convert_subtitle)
+        self.convert_file_edit.textChanged.connect(self._update_to_format_combo)
 
         # Laufzeit
         self._progress: QProgressDialog | None = None
@@ -980,6 +1015,28 @@ class MainWindow(QMainWindow):
         if file:
             self.convert_file_edit.setText(file)
 
+    def _update_to_format_combo(self, text: str):
+        path = Path(text)
+        if path.is_file():
+            suffix = path.suffix.lower()
+            for i in range(self.to_format_combo.count()):
+                item_text = self.to_format_combo.itemText(i)
+                is_disabled = False
+                if 'srt' in item_text.lower() and suffix == '.srt':
+                    is_disabled = True
+                elif 'ass' in item_text.lower() and suffix in ['.ass', '.ssa']:
+                    is_disabled = True
+                elif 'ssa' in item_text.lower() and suffix in ['.ass', '.ssa']:
+                    is_disabled = True
+                elif 'sub' in item_text.lower() and suffix in ['.sub', '.idx']:
+                    is_disabled = True
+                elif 'idx' in item_text.lower() and suffix in ['.sub', '.idx']:
+                    is_disabled = True
+                
+                item = self.to_format_combo.model().item(i)
+                if item:
+                    item.setEnabled(not is_disabled)
+    
     def _convert_subtitle(self):
         input_file = self.convert_file_edit.text()
         if not input_file:
@@ -988,7 +1045,9 @@ class MainWindow(QMainWindow):
 
         to_format = self.to_format_combo.currentText()
 
-        output_file, _ = QFileDialog.getSaveFileName(self, t("convert.output_file"), "", f"{to_format} Files (*.{to_format.lower().split('/')[0]})")
+        input_path = Path(input_file)
+        default_output_name = input_path.stem + "." + to_format.lower().split('/')[0]
+        output_file, _ = QFileDialog.getSaveFileName(self, t("convert.output_file"), default_output_name, f"{to_format} Files (*.{to_format.lower().split('/')[0]})")
         if not output_file:
             return
 
