@@ -10,8 +10,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.4.0] - 2026-xx-xx
 ### Added
 - New "Build" tab to create and edit MKV files.
-- Ability to add external audio and subtitle files to an MKV container.
-- Functionality to set the default audio and subtitle track.
+    - Ability to add external audio and subtitle files to an MKV container.
+    - Functionality to set the default audio and subtitle track.
+- New "Convert" tab for subtitle format conversion (SRT <-> ASS/SSA, SRT <-> SUB/IDX).
+    - Drag and drop support for the subtitle conversion input file.
+    - The output format dropdown now disables the source format.
+    - The save dialog for subtitle conversion now suggests a default filename.
 
 ### Changed
 - UI refactored into "Export" and "Build" tabs for better organization.

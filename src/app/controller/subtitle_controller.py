@@ -88,3 +88,6 @@ class SubtitleController:
     ) -> Path:
         keep_kinds = [keep] if keep else None
         return self.ffmpeg.remove_subtitles_and_replace(file, keep_kinds=keep_kinds, on_progress=on_progress)
+
+    def convert_subtitle(self, input_file: Path, output_file: Path, video_file: Optional[Path] = None, on_progress: Optional[Callable[[int], None]] = None) -> Path:
+        return self.ffmpeg.convert_subtitle(input_file, output_file, video_file=video_file, on_progress=on_progress)

@@ -73,6 +73,40 @@ class VideoListWidget(QListWidget):
             e.ignore()
 
 
+class SubtitleLineEdit(QLineEdit):
+    """QLineEdit that accepts subtitle file drops."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def _is_subtitle_file(self, path: Path) -> bool:
+        return path.suffix.lower() in ['.srt', '.ass', '.ssa', '.sub', '.idx']
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            urls = e.mimeData().urls()
+            if len(urls) == 1:
+                path = Path(urls[0].toLocalFile())
+                if path.is_file() and self._is_subtitle_file(path):
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+    def dragMoveEvent(self, e):
+        self.dragEnterEvent(e)
+
+    def dropEvent(self, e):
+        if e.mimeData().hasUrls():
+            urls = e.mimeData().urls()
+            if len(urls) == 1:
+                path = Path(urls[0].toLocalFile())
+                if path.is_file() and self._is_subtitle_file(path):
+                    self.setText(str(path))
+                    e.acceptProposedAction()
+                    return
+        e.ignore()
+
+
 class MainWindow(QMainWindow):
     """Hauptfenster (nur View + Wiring zu Controllern)."""
 
@@ -285,6 +319,44 @@ class MainWindow(QMainWindow):
         
         self.tabs.addTab(build_tab, t("tab.build"))
 
+        # Tab "Convert"
+        convert_tab = QWidget()
+        convert_layout = QVBoxLayout(convert_tab)
+
+        self.convert_group = QGroupBox()
+        convert_group_layout = QHBoxLayout()
+        self.convert_file_edit = SubtitleLineEdit()
+        self.browse_convert_file_button = QPushButton()
+        convert_group_layout.addWidget(self.convert_file_edit)
+        convert_group_layout.addWidget(self.browse_convert_file_button)
+        self.convert_group.setLayout(convert_group_layout)
+        convert_layout.addWidget(self.convert_group)
+
+        self.convert_video_group = QGroupBox()
+        convert_video_group_layout = QHBoxLayout()
+        self.convert_video_file_edit = QLineEdit()
+        self.browse_convert_video_file_button = QPushButton()
+        convert_video_group_layout.addWidget(self.convert_video_file_edit)
+        convert_video_group_layout.addWidget(self.browse_convert_video_file_button)
+        self.convert_video_group.setLayout(convert_video_group_layout)
+        convert_layout.addWidget(self.convert_video_group)
+        self.convert_video_group.setVisible(False)
+
+        self.format_group = QGroupBox()
+        format_layout = QHBoxLayout()
+        self.to_format_combo = QComboBox()
+        self.to_label = QLabel()
+        format_layout.addWidget(self.to_label)
+        format_layout.addWidget(self.to_format_combo)
+        self.format_group.setLayout(format_layout)
+        convert_layout.addWidget(self.format_group)
+        
+        self.btn_convert = QPushButton()
+        convert_layout.addWidget(self.btn_convert)
+        convert_layout.addStretch(1)
+
+        self.tabs.addTab(convert_tab, t("tab.convert"))
+
         left = QWidget()
         left_layout = QVBoxLayout(left)
         left_layout.addWidget(self.lbl_videos)
@@ -336,6 +408,14 @@ class MainWindow(QMainWindow):
         self.remove_subtitle_button.clicked.connect(self._remove_subtitle)
         self.browse_output_button.clicked.connect(self._browse_output)
         self.btn_create_mkv.clicked.connect(self._create_mkv)
+
+        # Convert tab
+        self.to_format_combo.addItems(["SRT", "ASS/SSA", "SUB/IDX"])
+        self.browse_convert_file_button.clicked.connect(self._browse_convert_file)
+        self.browse_convert_video_file_button.clicked.connect(self._browse_convert_video_file)
+        self.btn_convert.clicked.connect(self._convert_subtitle)
+        self.convert_file_edit.textChanged.connect(self._update_to_format_combo)
+        self.to_format_combo.currentTextChanged.connect(self._on_to_format_changed)
 
         # Laufzeit
         self._progress: QProgressDialog | None = None
@@ -612,6 +692,16 @@ class MainWindow(QMainWindow):
         # Tabs
         self.tabs.setTabText(0, t("tab.export"))
         self.tabs.setTabText(1, t("tab.build"))
+        self.tabs.setTabText(2, t("tab.convert"))
+
+        # Convert Tab
+        self.convert_group.setTitle(t("convert.input_file"))
+        self.browse_convert_file_button.setText(t("mkv.browse"))
+        self.convert_video_group.setTitle(t("convert.video_file"))
+        self.browse_convert_video_file_button.setText(t("mkv.browse"))
+        self.format_group.setTitle(t("convert.formats"))
+        self.to_label.setText(t("convert.to"))
+        self.btn_convert.setText(t("convert.convert"))
 
         # Menüs
         self.menu_file.setTitle(t("menu.file"))
@@ -933,6 +1023,67 @@ class MainWindow(QMainWindow):
             self.default_subtitle_combo.addItem(f"Stream {stream.index}: {stream.language} ({stream.codec_name})", i)
         for i, file in enumerate(self._subtitle_files):
             self.default_subtitle_combo.addItem(file.name, len(self._existing_subtitle_streams) + i)
+
+    def _browse_convert_video_file(self):
+        file, _ = QFileDialog.getOpenFileName(self, t("mkv.video_file"), "", "Video Files (*.mkv *.mp4 *.avi)")
+        if file:
+            self.convert_video_file_edit.setText(file)
+
+    def _on_to_format_changed(self, text: str):
+        is_sub_idx = "sub/idx" in text.lower()
+        self.convert_video_group.setVisible(is_sub_idx)
+
+    def _browse_convert_file(self):
+        file, _ = QFileDialog.getOpenFileName(self, t("convert.select_file"), "", "Subtitle Files (*.srt *.ass *.ssa *.sub *.idx)")
+        if file:
+            self.convert_file_edit.setText(file)
+
+    def _update_to_format_combo(self, text: str):
+        path = Path(text)
+        if path.is_file():
+            suffix = path.suffix.lower()
+            for i in range(self.to_format_combo.count()):
+                item_text = self.to_format_combo.itemText(i)
+                is_disabled = False
+                if 'srt' in item_text.lower() and suffix == '.srt':
+                    is_disabled = True
+                elif 'ass' in item_text.lower() and suffix in ['.ass', '.ssa']:
+                    is_disabled = True
+                elif 'ssa' in item_text.lower() and suffix in ['.ass', '.ssa']:
+                    is_disabled = True
+                elif 'sub' in item_text.lower() and suffix in ['.sub', '.idx']:
+                    is_disabled = True
+                elif 'idx' in item_text.lower() and suffix in ['.sub', '.idx']:
+                    is_disabled = True
+                
+                item = self.to_format_combo.model().item(i)
+                if item:
+                    item.setEnabled(not is_disabled)
+    
+    def _convert_subtitle(self):
+        input_file = self.convert_file_edit.text()
+        if not input_file:
+            QMessageBox.warning(self, t("app.title"), t("convert.no_input_file"))
+            return
+
+        to_format = self.to_format_combo.currentText()
+        video_file = self.convert_video_file_edit.text() if self.convert_video_group.isVisible() else None
+
+        if self.convert_video_group.isVisible() and not video_file:
+            QMessageBox.warning(self, t("app.title"), t("mkv.no_video_file"))
+            return
+
+        input_path = Path(input_file)
+        default_output_name = input_path.stem + "." + to_format.lower().split('/')[0]
+        output_file, _ = QFileDialog.getSaveFileName(self, t("convert.output_file"), default_output_name, f"{to_format} Files (*.{to_format.lower().split('/')[0]})")
+        if not output_file:
+            return
+
+        try:
+            self.sub_ctrl.convert_subtitle(Path(input_file), Path(output_file), video_file=Path(video_file) if video_file else None)
+            notification_center.success(t("convert.success", path=output_file))
+        except Exception as e:
+            QMessageBox.critical(self, t("app.title"), t("convert.fail", error=str(e)))
 
     # ---------- Batch-Kette ----------
     def _collect_current_folder_files(self) -> List[Path]:
