@@ -68,6 +68,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mw.opt.strip_with_rule": "Subs entfernen / Original ersetzen (Regel unten)",
         "mw.opt.remove_all": "Alle Untertitel entfernen",
         "mw.opt.custom_export_dir": "Eigenen Zielordner verwenden",
+        "mw.opt.series_name": "Serienname:",
+        "mw.opt.series_name_placeholder": "z.B. Breaking Bad (leer für 'unknown')",
         "mw.opt.apply_to_folder": "Auf gesamten Ordner anwenden (Batch)",
         "mw.start": "Start",
 
@@ -240,6 +242,8 @@ _STRINGS: Dict[str, Dict[str, str]] = {
         "mw.opt.strip_with_rule": "Remove subs & replace original (rule below)",
         "mw.opt.remove_all": "Remove all subtitles",
         "mw.opt.custom_export_dir": "Use custom target folder",
+        "mw.opt.series_name": "Series name:",
+        "mw.opt.series_name_placeholder": "e.g. Breaking Bad (empty for 'unknown')",
         "mw.opt.apply_to_folder": "Apply to entire folder (batch)",
         "mw.start": "Start",
 

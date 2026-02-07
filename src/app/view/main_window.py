@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import sys
 import subprocess
+import re
 from pathlib import Path
 from typing import Optional, List, TypedDict
 
@@ -34,6 +35,7 @@ class BatchStep(TypedDict, total=False):
     mode: str                 # "export" | "strip"
     keep: Optional[str]       # "forced" | "full" | None
     export_rel_idx: Optional[int]
+    out_dir: Optional[Path]
 
 
 class VideoListWidget(QListWidget):
@@ -228,6 +230,12 @@ class MainWindow(QMainWindow):
         export_row.addWidget(self.edit_export_dir, 1)
         export_row.addWidget(self.btn_browse_export)
 
+        series_row = QHBoxLayout()
+        self.lbl_series_name = QLabel()
+        self.edit_series_name = QLineEdit()
+        series_row.addWidget(self.lbl_series_name)
+        series_row.addWidget(self.edit_series_name, 1)
+
         # Tab "Export"
         export_tab = QWidget()
         export_layout = QVBoxLayout(export_tab)
@@ -238,6 +246,7 @@ class MainWindow(QMainWindow):
         export_layout.addWidget(self.keep_combo)
         export_layout.addWidget(self.chk_remove_all)
         export_layout.addLayout(export_row)
+        export_layout.addLayout(series_row)
         export_layout.addSpacing(8)
         export_layout.addWidget(self.chk_apply_folder)
         export_layout.addWidget(self.btn_start)
@@ -498,6 +507,27 @@ class MainWindow(QMainWindow):
         rel_idx = self._selected_row_rel_idx()
         self._start_batch(mode="export", keep=None, export_rel_idx=rel_idx)
 
+    def _start_batch(self, mode: str, keep: Optional[str], export_rel_idx: Optional[int]):
+        self._batch_queue.clear()
+        
+        out_dir = self._get_export_output_dir() if mode == "export" else None
+
+        self._batch_queue.append(BatchStep(
+            mode=mode, 
+            keep=keep, 
+            export_rel_idx=export_rel_idx,
+            out_dir=out_dir
+        ))
+        
+        self._progress = QProgressDialog("Starte Batch…", t("common.cancel"), 0, 100, self)
+        self._progress.setWindowTitle(t("common.batch"))
+        self._progress.setAutoClose(False)
+        self._progress.setAutoReset(False)
+        self._progress.setMinimumDuration(0)
+        self._progress.canceled.connect(self.batch_ctrl.stop)
+
+        self._start_next_batch_step()
+
     def _make_notifier(self):
         style = notify_style_default()
         if style == "statusbar":
@@ -669,6 +699,8 @@ class MainWindow(QMainWindow):
         self.chk_strip_keep_rule.setText(t("mw.opt.strip_with_rule"))
         self.chk_remove_all.setText(t("mw.opt.remove_all"))
         self.chk_custom_export_dir.setText(t("mw.opt.custom_export_dir"))
+        self.lbl_series_name.setText(t("mw.opt.series_name"))
+        self.edit_series_name.setPlaceholderText(t("mw.opt.series_name_placeholder"))
         self.btn_browse_export.setText(t("sd.pick.file"))
         self.chk_apply_folder.setText(t("mw.opt.apply_to_folder"))
         self.btn_start.setText(t("mw.start"))
@@ -841,6 +873,22 @@ class MainWindow(QMainWindow):
         if hasattr(self, "act_clear_list"):
             self.act_clear_list.setEnabled(has_items)
 
+    def _get_export_output_dir(self) -> Optional[Path]:
+        """Berechnet den Zielordner für den Export basierend auf den UI-Einstellungen."""
+        if self.chk_custom_export_dir.isChecked():
+            path_str = self.edit_export_dir.text().strip()
+            return Path(path_str) if path_str else None
+
+        series_name = self.edit_series_name.text().strip() or "unknown"
+        # Sanitize: ungültige Zeichen entfernen und Directory Traversal verhindern
+        series_name = re.sub(r'[<>:"/\\|?*]', '_', series_name)
+        while '..' in series_name:
+            series_name = series_name.replace('..', '_')
+
+        out_dir = self.default_dir / "subs" / series_name
+        out_dir.mkdir(parents=True, exist_ok=True)
+        return out_dir
+
     def _browse_export_dir(self):
         path = QFileDialog.getExistingDirectory(self, "Zielordner wählen")
         if path:
@@ -864,7 +912,9 @@ class MainWindow(QMainWindow):
                 if rel_idx is None:
                     QMessageBox.information(self, t("app.title"), t("mw.pick.subtitle.first"))
                     return
-                self._batch_queue.append(BatchStep(mode="export", keep=None, export_rel_idx=rel_idx))
+                
+                out_dir = self._get_export_output_dir()
+                self._batch_queue.append(BatchStep(mode="export", keep=None, export_rel_idx=rel_idx, out_dir=out_dir))
 
             if self.chk_remove_all.isChecked():
                 self._batch_queue.append(BatchStep(mode="strip", keep=None, export_rel_idx=None))
@@ -900,8 +950,11 @@ class MainWindow(QMainWindow):
             if rel_idx is None:
                 QMessageBox.information(self, t("app.title"), t("mw.pick.subtitle.first"))
                 return
+            
+            out_dir = self._get_export_output_dir()
+
             try:
-                out = self.sub_ctrl.export_stream(src, rel_idx)
+                out = self.sub_ctrl.export_stream(src, rel_idx, out_dir=out_dir)
                 notification_center.success(t("toast.exported", path=str(out)))
             except Exception as e:
                 QMessageBox.critical(self, t("mw.export.fail.title"), f"{t('mw.export.fail.msg')}\n\n{e}")
@@ -1112,7 +1165,8 @@ class MainWindow(QMainWindow):
             return
 
         self.batch_ctrl.start(files=files, mode=step["mode"],
-                              keep=step.get("keep"), export_rel_idx=step.get("export_rel_idx"))
+                              keep=step.get("keep"), export_rel_idx=step.get("export_rel_idx"),
+                              out_dir=step.get("out_dir"))
 
     def _on_batch_progress(self, percent: int, name: str):
         if self._progress:
