@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - Drag and drop support for the subtitle conversion input file.
     - The output format dropdown now disables the source format.
     - The save dialog for subtitle conversion now suggests a default filename.
+- Default export directory logic:
+    - If no custom target folder is specified, subtitles are exported to a `subs` directory in the executable's folder.
+    - Added a "Series name" field to organize exports into subfolders (defaults to `unknown`).
 
 ### Changed
 - UI refactored into "Export" and "Build" tabs for better organization.

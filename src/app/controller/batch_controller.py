@@ -41,6 +41,7 @@ class BatchController(QObject):
         mode: str,
         keep: Optional[str],
         export_rel_idx: Optional[int],
+        out_dir: Optional[Path] = None,
     ) -> None:
         """
         Startet eine neue Batch-Verarbeitung in einem Hintergrund-Thread.
@@ -50,7 +51,7 @@ class BatchController(QObject):
 
         # Thread + Worker anlegen
         thread = QThread(self)
-        worker = BatchWorker(files=files, mode=mode, keep=keep, export_rel_idx=export_rel_idx)
+        worker = BatchWorker(files=files, mode=mode, keep=keep, export_rel_idx=export_rel_idx, out_dir=out_dir)
         worker.moveToThread(thread)
 
         # Verbindungen
