@@ -12,10 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - New "Build" tab to create and edit MKV files.
     - Ability to add external audio and subtitle files to an MKV container.
     - Functionality to set the default audio and subtitle track.
+    - Support for matching multiple videos and subtitles from directories based on filename patterns (e.g., S01E01).
+    - Simplified output selection: Only a target directory is needed; filenames are automatically determined.
+    -UI flow in Build tab: All input fields and selections are automatically reset after successful creation
 - New "Convert" tab for subtitle format conversion (SRT <-> ASS/SSA, SRT <-> SUB/IDX).
     - Drag and drop support for the subtitle conversion input file.
     - The output format dropdown now disables the source format.
     - The save dialog for subtitle conversion now suggests a default filename.
+- Full Drag & Drop support in Build and Convert tabs.
+- Keyboard support (ENTF / Delete) for removing items from lists in the Build tab.
 - Default export directory logic:
     - If no custom target folder is specified, subtitles are exported to a `subs` directory in the executable's folder.
     - Added a "Series name" field to organize exports into subfolders (defaults to `unknown`).

@@ -91,3 +91,28 @@ class SubtitleController:
 
     def convert_subtitle(self, input_file: Path, output_file: Path, video_file: Optional[Path] = None, on_progress: Optional[Callable[[int], None]] = None) -> Path:
         return self.ffmpeg.convert_subtitle(input_file, output_file, video_file=video_file, on_progress=on_progress)
+
+    def match_videos_with_subtitles(self, video_dir: Path, subtitle_dir: Path) -> List[Tuple[Path, List[Path]]]:
+        """Matches video files in video_dir with subtitle files in subtitle_dir based on names."""
+        import re
+        videos = [f for f in video_dir.iterdir() if f.is_file() and is_video(f)]
+        sub_suffixes = ['.srt', '.ass', '.ssa', '.sub', '.idx', '.sup']
+        subtitles = [f for f in subtitle_dir.iterdir() if f.is_file() and f.suffix.lower() in sub_suffixes]
+
+        matches: List[Tuple[Path, List[Path]]] = []
+        pattern = re.compile(r'[sS]\d+[eE]\d+')
+
+        for v in videos:
+            v_stem = v.stem
+            matched_subs: List[Path] = []
+            v_match = pattern.search(v_stem)
+            
+            for s in subtitles:
+                if v_match:
+                    if v_match.group(0).lower() in s.name.lower():
+                        matched_subs.append(s)
+                elif v_stem.lower() in s.name.lower():
+                    matched_subs.append(s)
+            
+            matches.append((v, matched_subs))
+        return matches

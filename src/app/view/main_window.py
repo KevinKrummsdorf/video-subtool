@@ -75,23 +75,24 @@ class VideoListWidget(QListWidget):
             e.ignore()
 
 
-class SubtitleLineEdit(QLineEdit):
-    """QLineEdit that accepts subtitle file drops."""
-    def __init__(self, parent=None):
+class DropLineEdit(QLineEdit):
+    """QLineEdit that accepts file drops with an optional filter."""
+    file_dropped = Signal(Path)
+
+    def __init__(self, filter_func=None, parent=None):
         super().__init__(parent)
         self.setAcceptDrops(True)
-
-    def _is_subtitle_file(self, path: Path) -> bool:
-        return path.suffix.lower() in ['.srt', '.ass', '.ssa', '.sub', '.idx']
+        self._filter_func = filter_func
 
     def dragEnterEvent(self, e):
         if e.mimeData().hasUrls():
             urls = e.mimeData().urls()
             if len(urls) == 1:
                 path = Path(urls[0].toLocalFile())
-                if path.is_file() and self._is_subtitle_file(path):
-                    e.acceptProposedAction()
-                    return
+                if path.is_file():
+                    if not self._filter_func or self._filter_func(path):
+                        e.acceptProposedAction()
+                        return
         e.ignore()
 
     def dragMoveEvent(self, e):
@@ -102,11 +103,57 @@ class SubtitleLineEdit(QLineEdit):
             urls = e.mimeData().urls()
             if len(urls) == 1:
                 path = Path(urls[0].toLocalFile())
-                if path.is_file() and self._is_subtitle_file(path):
-                    self.setText(str(path))
-                    e.acceptProposedAction()
-                    return
+                self.setText(str(path))
+                self.file_dropped.emit(path)
+                e.acceptProposedAction()
+                return
         e.ignore()
+
+
+class DropListWidget(QListWidget):
+    """QListWidget that accepts multiple file drops and supports Delete key."""
+    files_dropped = Signal(list)
+    items_removed = Signal()
+
+    def __init__(self, filter_func=None, parent=None):
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.setSelectionMode(QListWidget.ExtendedSelection)
+        self._filter_func = filter_func
+
+    def dragEnterEvent(self, e):
+        if e.mimeData().hasUrls():
+            e.acceptProposedAction()
+        else:
+            e.ignore()
+
+    def dragMoveEvent(self, e):
+        self.dragEnterEvent(e)
+
+    def dropEvent(self, e):
+        if e.mimeData().hasUrls():
+            urls = e.mimeData().urls()
+            paths = []
+            for url in urls:
+                path = Path(url.toLocalFile())
+                if path.is_file():
+                    if not self._filter_func or self._filter_func(path):
+                        paths.append(path)
+            if paths:
+                self.files_dropped.emit(paths)
+                e.acceptProposedAction()
+                return
+        e.ignore()
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Delete:
+            items = self.selectedItems()
+            if items:
+                for item in items:
+                    self.takeItem(self.row(item))
+                self.items_removed.emit()
+        else:
+            super().keyPressEvent(event)
 
 
 class MainWindow(QMainWindow):
@@ -259,10 +306,17 @@ class MainWindow(QMainWindow):
         build_tab = QWidget()
         build_layout = QVBoxLayout(build_tab)
         
+        # Batch Mode Checkbox
+        self.chk_build_batch = QCheckBox()
+        self.chk_build_batch.toggled.connect(self._on_build_batch_toggled)
+        build_layout.addWidget(self.chk_build_batch)
+
         # Video File Selection
         self.video_group = QGroupBox()
         video_layout = QHBoxLayout()
-        self.video_file_edit = QLineEdit()
+        self.video_file_edit = DropLineEdit(
+            filter_func=lambda p: p.suffix.lower() in ['.mkv', '.mp4', '.avi', '.ts', '.m2ts']
+        )
         self.browse_video_button = QPushButton()
         video_layout.addWidget(self.video_file_edit)
         video_layout.addWidget(self.browse_video_button)
@@ -272,7 +326,9 @@ class MainWindow(QMainWindow):
         # Audio Files Selection
         self.audio_group = QGroupBox()
         audio_layout = QVBoxLayout()
-        self.audio_list_widget = QListWidget()
+        self.audio_list_widget = DropListWidget(
+            filter_func=lambda p: p.suffix.lower() in ['.m4a', '.aac', '.ac3', '.dts', '.mp3', '.flac', '.wav']
+        )
         audio_buttons_layout = QHBoxLayout()
         self.add_audio_button = QPushButton()
         self.remove_audio_button = QPushButton()
@@ -286,7 +342,9 @@ class MainWindow(QMainWindow):
         # Subtitle Files Selection
         self.subtitle_group = QGroupBox()
         subtitle_layout = QVBoxLayout()
-        self.subtitle_list_widget = QListWidget()
+        self.subtitle_list_widget = DropListWidget(
+            filter_func=lambda p: p.suffix.lower() in ['.srt', '.ass', '.ssa', '.sub', '.idx', '.sup']
+        )
         subtitle_buttons_layout = QHBoxLayout()
         self.add_subtitle_button = QPushButton()
         self.remove_subtitle_button = QPushButton()
@@ -311,12 +369,12 @@ class MainWindow(QMainWindow):
         self.default_track_group.setLayout(default_track_layout)
         build_layout.addWidget(self.default_track_group)
 
-        # Output File Selection
+        # Output Directory Selection
         self.output_group = QGroupBox()
         output_layout = QHBoxLayout()
-        self.output_file_edit = QLineEdit()
+        self.output_dir_edit = QLineEdit()
         self.browse_output_button = QPushButton()
-        output_layout.addWidget(self.output_file_edit)
+        output_layout.addWidget(self.output_dir_edit)
         output_layout.addWidget(self.browse_output_button)
         self.output_group.setLayout(output_layout)
         build_layout.addWidget(self.output_group)
@@ -334,7 +392,9 @@ class MainWindow(QMainWindow):
 
         self.convert_group = QGroupBox()
         convert_group_layout = QHBoxLayout()
-        self.convert_file_edit = SubtitleLineEdit()
+        self.convert_file_edit = DropLineEdit(
+            filter_func=lambda p: p.suffix.lower() in ['.srt', '.ass', '.ssa', '.sub', '.idx']
+        )
         self.browse_convert_file_button = QPushButton()
         convert_group_layout.addWidget(self.convert_file_edit)
         convert_group_layout.addWidget(self.browse_convert_file_button)
@@ -410,6 +470,13 @@ class MainWindow(QMainWindow):
         self.chk_remove_all.toggled.connect(self._update_keep_combo_enabled)
 
         # Build tab signals
+        self.video_file_edit.file_dropped.connect(self._on_video_file_set)
+        self.video_file_edit.textChanged.connect(lambda t: self._on_video_file_set(Path(t)) if t and Path(t).exists() else None)
+        self.audio_list_widget.files_dropped.connect(self._on_audio_files_added)
+        self.audio_list_widget.items_removed.connect(self._on_audio_items_removed)
+        self.subtitle_list_widget.files_dropped.connect(self._on_subtitle_files_added)
+        self.subtitle_list_widget.items_removed.connect(self._on_subtitle_items_removed)
+
         self.browse_video_button.clicked.connect(self._browse_video)
         self.add_audio_button.clicked.connect(self._add_audio)
         self.remove_audio_button.clicked.connect(self._remove_audio)
@@ -717,9 +784,10 @@ class MainWindow(QMainWindow):
         self.default_track_group.setTitle(t("mkv.default_tracks"))
         self.default_audio_label.setText(t("mkv.default_audio"))
         self.default_subtitle_label.setText(t("mkv.default_subtitle"))
-        self.output_group.setTitle(t("mkv.output_file"))
+        self.output_group.setTitle(t("mkv.output_dir"))
         self.browse_output_button.setText(t("mkv.browse"))
         self.btn_create_mkv.setText(t("mkv.create_mkv"))
+        self.chk_build_batch.setText(t("mkv.batch_mode"))
 
         # Tabs
         self.tabs.setTabText(0, t("tab.export"))
@@ -977,17 +1045,63 @@ class MainWindow(QMainWindow):
                 return
 
     # ---------- Build Tab methods ----------
+    def _on_build_batch_toggled(self, checked: bool):
+        self.video_group.setTitle(t("mkv.video_dir") if checked else t("mkv.video_file"))
+        self.subtitle_group.setTitle(t("mkv.subtitle_dir") if checked else t("mkv.subtitle_files"))
+        
+        # In batch mode, we only allow one subtitle directory, and hide audio for simplicity or keep it?
+        # The request said "mehrere videos und mehrere srt datein aus einem ordner matchen".
+        # Let's hide audio and default tracks in batch mode to keep it simple as requested.
+        self.audio_group.setVisible(not checked)
+        self.default_track_group.setVisible(not checked)
+        
+        # Update browse buttons to open directory dialogs in batch mode
+        try:
+            self.browse_video_button.clicked.disconnect()
+            self.add_subtitle_button.clicked.disconnect()
+        except Exception:
+            pass
+            
+        if checked:
+            self.browse_video_button.clicked.connect(self._browse_video_dir)
+            self.add_subtitle_button.clicked.connect(self._browse_subtitle_dir)
+            self.add_subtitle_button.setText(t("mkv.browse"))
+        else:
+            self.browse_video_button.clicked.connect(self._browse_video)
+            self.add_subtitle_button.clicked.connect(self._add_subtitle)
+            self.add_subtitle_button.setText(t("mkv.add_subtitle"))
+
+        self._reset_build_tab()
+
+    def _browse_video_dir(self):
+        path = QFileDialog.getExistingDirectory(self, t("mkv.video_dir"))
+        if path:
+            self.video_file_edit.setText(path)
+            self._video_file = Path(path)
+
+    def _browse_subtitle_dir(self):
+        path = QFileDialog.getExistingDirectory(self, t("mkv.subtitle_dir"))
+        if path:
+            self.subtitle_list_widget.clear()
+            self.subtitle_list_widget.addItem(path)
+            self._subtitle_files = [Path(path)]
+
     def _create_mkv(self):
         if not self._video_file:
             QMessageBox.warning(self, t("mkv.title"), t("mkv.no_video_file"))
             return
 
-        output_path = self.output_file_edit.text()
-        if not output_path:
-            QMessageBox.warning(self, t("mkv.title"), t("mkv.no_output_file"))
+        output_dir_path = self.output_dir_edit.text()
+        if not output_dir_path:
+            QMessageBox.warning(self, t("mkv.title"), t("mkv.no_output_dir"))
             return
-        output_file = Path(output_path)
+        output_dir = Path(output_dir_path)
 
+        if self.chk_build_batch.isChecked():
+            self._create_mkv_batch(output_dir)
+            return
+
+        output_file = output_dir / self._video_file.name
         default_audio_index = self.default_audio_combo.currentData()
         default_subtitle_index = self.default_subtitle_combo.currentData()
 
@@ -1012,54 +1126,138 @@ class MainWindow(QMainWindow):
             )
             progress_dialog.setValue(100)
             QMessageBox.information(self, t("mkv.title"), t("mkv.success", path=str(output_file)))
+            self._reset_build_tab()
         except Exception as e:
             progress_dialog.close()
             QMessageBox.critical(self, t("mkv.title"), t("mkv.fail", error=str(e)))
 
-    def _browse_video(self):
-        file, _ = QFileDialog.getOpenFileName(self, t("mkv.video_file"), "", "Video Files (*.mkv *.mp4 *.avi)")
-        if file:
-            self._video_file = Path(file)
-            self.video_file_edit.setText(file)
+    def _create_mkv_batch(self, output_dir: Path):
+        video_dir = self._video_file
+        if not video_dir or not video_dir.is_dir():
+            QMessageBox.warning(self, t("mkv.title"), "Video path must be a directory in batch mode.")
+            return
+        
+        sub_dir = self._subtitle_files[0] if self._subtitle_files else None
+        if not sub_dir or not sub_dir.is_dir():
+            QMessageBox.warning(self, t("mkv.title"), "Subtitle path must be a directory in batch mode.")
+            return
+
+        matches = self.sub_ctrl.match_videos_with_subtitles(video_dir, sub_dir)
+        if not matches:
+            QMessageBox.warning(self, t("mkv.title"), t("mw.no.videos"))
+            return
+
+        progress_dialog = QProgressDialog(t("common.batch"), t("common.cancel"), 0, len(matches), self)
+        progress_dialog.setWindowModality(Qt.WindowModal)
+        progress_dialog.show()
+
+        ffmpeg_service = FfmpegService()
+        processed = 0
+        errors = 0
+        
+        for i, (v, subs) in enumerate(matches):
+            if progress_dialog.wasCanceled():
+                break
             
+            progress_dialog.setLabelText(t("common.processing", name=v.name))
+            progress_dialog.setValue(i)
+            QApplication.processEvents()
+            
+            try:
+                ffmpeg_service.create_mkv(
+                    video_file=v,
+                    audio_files=[],
+                    subtitle_files=subs,
+                    output_file=output_dir / v.name,
+                    on_progress=None
+                )
+                processed += 1
+            except Exception as e:
+                errors += 1
+                notification_center.error(f"{v.name}: {e}")
+
+        progress_dialog.setValue(len(matches))
+        if errors == 0:
+            notification_center.success(t("mw.batch.done.msg", processed=str(processed)))
+            self._reset_build_tab()
+        else:
+            notification_center.warn(t("mw.batch.done.partial", processed=str(processed), errors=str(errors)))
+
+    def _on_video_file_set(self, path: Path):
+        if path == self._video_file:
+            return
+        self._video_file = path
+        self.video_file_edit.setText(str(path))
+        
+        try:
             ffmpeg_service = FfmpegService()
             probe_result = ffmpeg_service.probe_file(self._video_file)
             self._existing_audio_streams = [s for s in probe_result.streams if s.codec_type == "audio"]
             self._existing_subtitle_streams = [s for s in probe_result.streams if s.codec_type == "subtitle"]
-            
-            self._update_default_audio_combo()
-            self._update_default_subtitle_combo()
+        except Exception:
+            self._existing_audio_streams = []
+            self._existing_subtitle_streams = []
+        
+        self._update_default_audio_combo()
+        self._update_default_subtitle_combo()
+
+    def _browse_video(self):
+        file, _ = QFileDialog.getOpenFileName(self, t("mkv.video_file"), "", "Video Files (*.mkv *.mp4 *.avi *.ts *.m2ts)")
+        if file:
+            self._on_video_file_set(Path(file))
+
+    def _on_audio_files_added(self, paths: List[Path]):
+        for p in paths:
+            if p not in self._audio_files:
+                self._audio_files.append(p)
+                self.audio_list_widget.addItem(str(p))
+        self._update_default_audio_combo()
+
+    def _on_audio_items_removed(self):
+        self._audio_files = [Path(self.audio_list_widget.item(i).text()) for i in range(self.audio_list_widget.count())]
+        self._update_default_audio_combo()
 
     def _add_audio(self):
-        files, _ = QFileDialog.getOpenFileNames(self, t("mkv.audio_files"), "", "Audio Files (*.m4a *.aac *.ac3 *.dts *.mp3)")
-        for file in files:
-            self._audio_files.append(Path(file))
-            self.audio_list_widget.addItem(file)
-        self._update_default_audio_combo()
+        files, _ = QFileDialog.getOpenFileNames(self, t("mkv.audio_files"), "", "Audio Files (*.m4a *.aac *.ac3 *.dts *.mp3 *.flac *.wav)")
+        if files:
+            self._on_audio_files_added([Path(f) for f in files])
 
     def _remove_audio(self):
-        for item in self.audio_list_widget.selectedItems():
-            self._audio_files.remove(Path(item.text()))
+        items = self.audio_list_widget.selectedItems()
+        if not items:
+            return
+        for item in items:
             self.audio_list_widget.takeItem(self.audio_list_widget.row(item))
-        self._update_default_audio_combo()
+        self._on_audio_items_removed()
+
+    def _on_subtitle_files_added(self, paths: List[Path]):
+        for p in paths:
+            if p not in self._subtitle_files:
+                self._subtitle_files.append(p)
+                self.subtitle_list_widget.addItem(str(p))
+        self._update_default_subtitle_combo()
+
+    def _on_subtitle_items_removed(self):
+        self._subtitle_files = [Path(self.subtitle_list_widget.item(i).text()) for i in range(self.subtitle_list_widget.count())]
+        self._update_default_subtitle_combo()
 
     def _add_subtitle(self):
-        files, _ = QFileDialog.getOpenFileNames(self, t("mkv.subtitle_files"), "", "Subtitle Files (*.srt *.ass *.sup)")
-        for file in files:
-            self._subtitle_files.append(Path(file))
-            self.subtitle_list_widget.addItem(file)
-        self._update_default_subtitle_combo()
+        files, _ = QFileDialog.getOpenFileNames(self, t("mkv.subtitle_files"), "", "Subtitle Files (*.srt *.ass *.ssa *.sub *.idx *.sup)")
+        if files:
+            self._on_subtitle_files_added([Path(f) for f in files])
 
     def _remove_subtitle(self):
-        for item in self.subtitle_list_widget.selectedItems():
-            self._subtitle_files.remove(Path(item.text()))
+        items = self.subtitle_list_widget.selectedItems()
+        if not items:
+            return
+        for item in items:
             self.subtitle_list_widget.takeItem(self.subtitle_list_widget.row(item))
-        self._update_default_subtitle_combo()
+        self._on_subtitle_items_removed()
 
     def _browse_output(self):
-        file, _ = QFileDialog.getSaveFileName(self, t("mkv.output_file"), "", "MKV Files (*.mkv)")
-        if file:
-            self.output_file_edit.setText(file)
+        path = QFileDialog.getExistingDirectory(self, t("mkv.output_dir"))
+        if path:
+            self.output_dir_edit.setText(path)
 
     def _update_default_audio_combo(self):
         self.default_audio_combo.clear()
@@ -1076,6 +1274,19 @@ class MainWindow(QMainWindow):
             self.default_subtitle_combo.addItem(f"Stream {stream.index}: {stream.language} ({stream.codec_name})", i)
         for i, file in enumerate(self._subtitle_files):
             self.default_subtitle_combo.addItem(file.name, len(self._existing_subtitle_streams) + i)
+
+    def _reset_build_tab(self):
+        self._video_file = None
+        self._audio_files = []
+        self._subtitle_files = []
+        self._existing_audio_streams = []
+        self._existing_subtitle_streams = []
+        self.video_file_edit.clear()
+        self.audio_list_widget.clear()
+        self.subtitle_list_widget.clear()
+        self.default_audio_combo.clear()
+        self.default_subtitle_combo.clear()
+        # output_dir_edit is kept as it might be useful for next operation
 
     def _browse_convert_video_file(self):
         file, _ = QFileDialog.getOpenFileName(self, t("mkv.video_file"), "", "Video Files (*.mkv *.mp4 *.avi)")
